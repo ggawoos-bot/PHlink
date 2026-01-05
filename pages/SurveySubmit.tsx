@@ -174,6 +174,25 @@ const SurveySubmit: React.FC = () => {
           return;
         }
       }
+      
+      // Table field validation
+      if (field.type === 'table' && field.columns) {
+        const tableData = answers[field.id] as TableRow[] | undefined;
+        if (tableData && Array.isArray(tableData)) {
+          for (let rowIndex = 0; rowIndex < tableData.length; rowIndex++) {
+            const row = tableData[rowIndex];
+            for (const col of field.columns) {
+              if (col.required) {
+                const cellValue = row.data?.[col.id];
+                if (cellValue === undefined || cellValue === null || cellValue === '') {
+                  alert(`'${field.label}' 테이블의 ${rowIndex + 1}번째 행에서 '${col.label}' 항목을 입력/선택해주세요.`);
+                  return;
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
     setLoading(true);
