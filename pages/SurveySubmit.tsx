@@ -265,6 +265,16 @@ const SurveySubmit: React.FC = () => {
             onChange={(e) => handleInputChange(field.id, e.target.value)}
           />
         );
+      case 'table':
+        return (
+          <TableEditor
+            columns={field.columns || []}
+            value={(answers[field.id] as TableRow[]) || []}
+            onChange={(rows) => handleInputChange(field.id, rows)}
+            minRows={field.minRows || 1}
+            maxRows={field.maxRows || 100}
+          />
+        );
       default: // text
         return (
           <input
@@ -305,11 +315,13 @@ const SurveySubmit: React.FC = () => {
           목록으로 돌아가기
         </button>
       </div>
-    )
+    );
   }
 
+  const hasTableField = survey?.fields.some(f => f.type === 'table');
+
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className={`${hasTableField ? 'w-full px-4 sm:px-6 lg:px-8' : 'max-w-3xl mx-auto px-4 sm:px-6 lg:px-8'} py-12`}>
       <div className="mb-8">
         <div className="flex justify-between items-start">
           <div>

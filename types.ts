@@ -21,7 +21,21 @@ export interface SurveyQnAPost {
 }
 
 // Survey / Data Collection Types
-export type SurveyFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'multiselect';
+export type SurveyFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'multiselect' | 'table';
+
+export interface TableColumn {
+  id: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'select';
+  required?: boolean;
+  options?: string[]; // For select type
+  width?: number; // Column width in pixels
+}
+
+export interface TableRow {
+  id: string;
+  data: Record<string, any>; // columnId -> value
+}
 
 export interface SurveyField {
   id: string;
@@ -30,6 +44,9 @@ export interface SurveyField {
   required: boolean;
   options?: string[]; // For select and multiselect types
   description?: string; // Optional help text
+  columns?: TableColumn[]; // For table type
+  minRows?: number; // Minimum rows for table
+  maxRows?: number; // Maximum rows for table
 }
 
 export interface Survey {

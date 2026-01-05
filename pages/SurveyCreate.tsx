@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Save, Plus, Trash2, ArrowLeft, ClipboardList, Type, Hash, Calendar, List, CheckSquare, AlignLeft, X } from 'lucide-react';
+import { Save, Plus, Trash2, ArrowLeft, ClipboardList, Type, Hash, Calendar, List, CheckSquare, AlignLeft, X, Table } from 'lucide-react';
 import { getSurvey, upsertSurvey } from '../services/surveys';
-import { Survey, SurveyField, SurveyFieldType } from '../types';
+import { Survey, SurveyField, SurveyFieldType, TableColumn } from '../types';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -104,6 +104,22 @@ const SurveyCreate: React.FC = () => {
         newFields[index].options = [];
     }
     
+    // Reset columns if type changes to non-table type
+    if (key === 'type' && value !== 'table') {
+        newFields[index].columns = undefined;
+        newFields[index].minRows = undefined;
+        newFields[index].maxRows = undefined;
+    }
+    
+    // Initialize columns for table type
+    if (key === 'type' && value === 'table' && !newFields[index].columns) {
+        newFields[index].columns = [
+            { id: `COL${Date.now()}`, label: '항목', type: 'text', required: false, width: 150 }
+        ];
+        newFields[index].minRows = 1;
+        newFields[index].maxRows = 100;
+    }
+    
     setFields(newFields);
   };
 
@@ -119,6 +135,32 @@ const SurveyCreate: React.FC = () => {
       const newFields = [...fields];
       if (newFields[fieldIndex].options) {
           newFields[fieldIndex].options = newFields[fieldIndex].options!.filter((_, i) => i !== optionIndex);
+      }
+      setFields(newFields);
+  };
+
+  const handleAddTableColumn = (fieldIndex: number) => {
+      const newFields = [...fields];
+      const currentColumns = newFields[fieldIndex].columns || [];
+      newFields[fieldIndex].columns = [
+          ...currentColumns,
+          { id: `COL${Date.now()}${Math.random()}`, label: '새 컬럼', type: 'text', required: false, width: 150 }
+      ];
+      setFields(newFields);
+  };
+
+  const handleRemoveTableColumn = (fieldIndex: number, colIndex: number) => {
+      const newFields = [...fields];
+      if (newFields[fieldIndex].columns) {
+          newFields[fieldIndex].columns = newFields[fieldIndex].columns!.filter((_, i) => i !== colIndex);
+      }
+      setFields(newFields);
+  };
+
+  const handleTableColumnChange = (fieldIndex: number, colIndex: number, key: keyof TableColumn, value: any) => {
+      const newFields = [...fields];
+      if (newFields[fieldIndex].columns && newFields[fieldIndex].columns![colIndex]) {
+          (newFields[fieldIndex].columns![colIndex] as any)[key] = value;
       }
       setFields(newFields);
   };
@@ -146,6 +188,10 @@ const SurveyCreate: React.FC = () => {
         }
         if (['select', 'multiselect'].includes(field.type) && (!field.options || field.options.length === 0)) {
             alert(`'${field.label}' 항목의 선택 옵션을 최소 1개 이상 추가해주세요.`);
+            return;
+        }
+        if (field.type === 'table' && (!field.columns || field.columns.length === 0)) {
+            alert(`'${field.label}' 항목의 테이블 컬럼을 최소 1개 이상 추가해주세요.`);
             return;
         }
     }
@@ -181,6 +227,7 @@ const SurveyCreate: React.FC = () => {
           case 'date': return <Calendar size={16} />;
           case 'select': return <List size={16} />;
           case 'multiselect': return <CheckSquare size={16} />;
+          case 'table': return <Table size={16} />;
           default: return <Type size={16} />;
       }
   };
@@ -336,6 +383,7 @@ const SurveyCreate: React.FC = () => {
                                   <option value="date">날짜 (Date)</option>
                                   <option value="select">단일 선택 (Dropdown/Radio)</option>
                                   <option value="multiselect">다중 선택 (Checkbox)</option>
+                                  <option value="table">테이블 (Table)</option>
                                </select>
                                <div className="absolute left-3 top-3 text-gray-500 pointer-events-none">
                                    {getTypeIcon(field.type)}
@@ -354,6 +402,89 @@ const SurveyCreate: React.FC = () => {
                        </div>
                     </div>
                  </div>
+
+                 {/* Table Column Editor */}
+                 {field.type === 'table' && (
+                     <div className="mt-4 pt-4 border-t border-gray-200">
+                         <div className="flex justify-between items-center mb-3">
+                             <label className="block text-xs font-bold text-gray-500 uppercase">테이블 컬럼 관리</label>
+                             <button 
+                                type="button"
+                                onClick={() => handleAddTableColumn(index)}
+                                className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-bold hover:bg-indigo-100 border border-indigo-200"
+                             >
+                                 <Plus size={12} /> 컬럼 추가
+                             </button>
+                         </div>
+                         <div className="space-y-2 mb-3">
+                             {field.columns?.map((col, colIdx) => (
+                                 <div key={col.id} className="flex gap-2 items-center bg-white border border-gray-200 rounded-lg p-2">
+                                     <input 
+                                       type="text"
+                                       value={col.label}
+                                       onChange={(e) => handleTableColumnChange(index, colIdx, 'label', e.target.value)}
+                                       placeholder="컬럼명"
+                                       className="flex-1 p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
+                                     />
+                                     <select
+                                       value={col.type}
+                                       onChange={(e) => handleTableColumnChange(index, colIdx, 'type', e.target.value)}
+                                       className="p-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                     >
+                                         <option value="text">텍스트</option>
+                                         <option value="number">숫자</option>
+                                         <option value="date">날짜</option>
+                                         <option value="select">선택</option>
+                                     </select>
+                                     <input 
+                                       type="number"
+                                       value={col.width || 150}
+                                       onChange={(e) => handleTableColumnChange(index, colIdx, 'width', parseInt(e.target.value))}
+                                       placeholder="너비"
+                                       className="w-16 p-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                     />
+                                     <label className="flex items-center gap-1 text-xs">
+                                         <input 
+                                           type="checkbox"
+                                           checked={col.required || false}
+                                           onChange={(e) => handleTableColumnChange(index, colIdx, 'required', e.target.checked)}
+                                           className="h-3 w-3 text-indigo-600 rounded"
+                                         />
+                                         필수
+                                     </label>
+                                     <button 
+                                        onClick={() => handleRemoveTableColumn(index, colIdx)}
+                                        className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                     >
+                                         <X size={14} />
+                                     </button>
+                                 </div>
+                             ))}
+                         </div>
+                         <div className="grid grid-cols-2 gap-3">
+                             <div>
+                                 <label className="block text-xs text-gray-600 mb-1">최소 행 수</label>
+                                 <input 
+                                   type="number"
+                                   value={field.minRows || 1}
+                                   onChange={(e) => handleFieldChange(index, 'minRows', parseInt(e.target.value) || 1)}
+                                   min="0"
+                                   className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
+                                 />
+                             </div>
+                             <div>
+                                 <label className="block text-xs text-gray-600 mb-1">최대 행 수</label>
+                                 <input 
+                                   type="number"
+                                   value={field.maxRows || 100}
+                                   onChange={(e) => handleFieldChange(index, 'maxRows', parseInt(e.target.value) || 100)}
+                                   min="1"
+                                   className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
+                                 />
+                             </div>
+                         </div>
+                     </div>
+                 )}
 
                  {/* Option Editor for Select/Multiselect */}
                  {['select', 'multiselect'].includes(field.type) && (
