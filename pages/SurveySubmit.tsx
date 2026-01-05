@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Check, AlertCircle, Building, Save, Search, Share2, X, Copy, QrCode, Calendar, ChevronDown, MessageSquare, Send, User } from 'lucide-react';
 import { createSurveyQnA, getSurvey, listSurveyQnAs } from '../services/surveys';
-import { Survey, Agency, SurveyField, SurveyQnAPost } from '../types';
+import { Survey, Agency, SurveyField, SurveyQnAPost, TableRow } from '../types';
 import { supabase } from '../services/supabaseClient';
 import organizationsData from '../org/organizations.generated.json';
+import TableEditor from '../components/TableEditor';
 
 type SurveyTimingStatus = 'UPCOMING' | 'OPEN' | 'CLOSED';
 
