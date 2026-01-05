@@ -70,7 +70,7 @@ const AdminLogin: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="admin@example.com"
+              placeholder=""
               autoComplete="email"
             />
           </div>
@@ -82,7 +82,7 @@ const AdminLogin: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="********"
+              placeholder=""
               autoComplete="current-password"
             />
           </div>
