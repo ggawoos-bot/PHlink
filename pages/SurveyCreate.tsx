@@ -161,6 +161,33 @@ const SurveyCreate: React.FC = () => {
       const newFields = [...fields];
       if (newFields[fieldIndex].columns && newFields[fieldIndex].columns![colIndex]) {
           (newFields[fieldIndex].columns![colIndex] as any)[key] = value;
+          
+          // Reset options if type changes to non-select type
+          if (key === 'type' && value !== 'select') {
+              newFields[fieldIndex].columns![colIndex].options = undefined;
+          }
+          // Initialize options array for select type
+          if (key === 'type' && value === 'select' && !newFields[fieldIndex].columns![colIndex].options) {
+              newFields[fieldIndex].columns![colIndex].options = [];
+          }
+      }
+      setFields(newFields);
+  };
+
+  const handleAddTableColumnOption = (fieldIndex: number, colIndex: number, option: string) => {
+      if (!option.trim()) return;
+      const newFields = [...fields];
+      if (newFields[fieldIndex].columns && newFields[fieldIndex].columns![colIndex]) {
+          const currentOptions = newFields[fieldIndex].columns![colIndex].options || [];
+          newFields[fieldIndex].columns![colIndex].options = [...currentOptions, option];
+      }
+      setFields(newFields);
+  };
+
+  const handleRemoveTableColumnOption = (fieldIndex: number, colIndex: number, optionIndex: number) => {
+      const newFields = [...fields];
+      if (newFields[fieldIndex].columns && newFields[fieldIndex].columns![colIndex].options) {
+          newFields[fieldIndex].columns![colIndex].options = newFields[fieldIndex].columns![colIndex].options!.filter((_, i) => i !== optionIndex);
       }
       setFields(newFields);
   };
@@ -418,46 +445,93 @@ const SurveyCreate: React.FC = () => {
                          </div>
                          <div className="space-y-2 mb-3">
                              {field.columns?.map((col, colIdx) => (
-                                 <div key={col.id} className="flex gap-2 items-center bg-white border border-gray-200 rounded-lg p-2">
-                                     <input 
-                                       type="text"
-                                       value={col.label}
-                                       onChange={(e) => handleTableColumnChange(index, colIdx, 'label', e.target.value)}
-                                       placeholder="컬럼명"
-                                       className="flex-1 p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
-                                     />
-                                     <select
-                                       value={col.type}
-                                       onChange={(e) => handleTableColumnChange(index, colIdx, 'type', e.target.value)}
-                                       className="p-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                                     >
-                                         <option value="text">텍스트</option>
-                                         <option value="number">숫자</option>
-                                         <option value="date">날짜</option>
-                                         <option value="select">선택</option>
-                                     </select>
-                                     <input 
-                                       type="number"
-                                       value={col.width || 150}
-                                       onChange={(e) => handleTableColumnChange(index, colIdx, 'width', parseInt(e.target.value))}
-                                       placeholder="너비"
-                                       className="w-16 p-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                                     />
-                                     <label className="flex items-center gap-1 text-xs">
+                                 <div key={col.id} className="bg-white border border-gray-200 rounded-lg p-3">
+                                     <div className="flex gap-2 items-center mb-2">
                                          <input 
-                                           type="checkbox"
-                                           checked={col.required || false}
-                                           onChange={(e) => handleTableColumnChange(index, colIdx, 'required', e.target.checked)}
-                                           className="h-3 w-3 text-indigo-600 rounded"
+                                           type="text"
+                                           value={col.label}
+                                           onChange={(e) => handleTableColumnChange(index, colIdx, 'label', e.target.value)}
+                                           placeholder="컬럼명"
+                                           className="flex-1 p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
                                          />
-                                         필수
-                                     </label>
-                                     <button 
-                                        onClick={() => handleRemoveTableColumn(index, colIdx)}
-                                        className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                                     >
-                                         <X size={14} />
-                                     </button>
+                                         <select
+                                           value={col.type}
+                                           onChange={(e) => handleTableColumnChange(index, colIdx, 'type', e.target.value)}
+                                           className="p-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                         >
+                                             <option value="text">텍스트</option>
+                                             <option value="number">숫자</option>
+                                             <option value="date">날짜</option>
+                                             <option value="select">선택</option>
+                                         </select>
+                                         <input 
+                                           type="number"
+                                           value={col.width || 150}
+                                           onChange={(e) => handleTableColumnChange(index, colIdx, 'width', parseInt(e.target.value))}
+                                           placeholder="너비"
+                                           className="w-16 p-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                         />
+                                         <label className="flex items-center gap-1 text-xs">
+                                             <input 
+                                               type="checkbox"
+                                               checked={col.required || false}
+                                               onChange={(e) => handleTableColumnChange(index, colIdx, 'required', e.target.checked)}
+                                               className="h-3 w-3 text-indigo-600 rounded"
+                                             />
+                                             필수
+                                         </label>
+                                         <button 
+                                            onClick={() => handleRemoveTableColumn(index, colIdx)}
+                                            className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                         >
+                                             <X size={14} />
+                                         </button>
+                                     </div>
+                                     
+                                     {/* Select Options Editor */}
+                                     {col.type === 'select' && (
+                                         <div className="mt-2 pt-2 border-t border-gray-100">
+                                             <label className="block text-xs font-medium text-gray-600 mb-1.5">선택 옵션</label>
+                                             <div className="flex flex-wrap gap-1.5 mb-2">
+                                                 {col.options?.map((opt, optIdx) => (
+                                                     <div key={optIdx} className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-800 px-2 py-0.5 rounded text-xs">
+                                                         <span>{opt}</span>
+                                                         <button 
+                                                            onClick={() => handleRemoveTableColumnOption(index, colIdx, optIdx)}
+                                                            className="text-indigo-400 hover:text-red-500 transition-colors"
+                                                         >
+                                                             <X size={12} />
+                                                         </button>
+                                                     </div>
+                                                 ))}
+                                             </div>
+                                             <div className="flex gap-1.5">
+                                                 <input 
+                                                   type="text"
+                                                   placeholder="옵션 추가 (예: '있음', '없음')"
+                                                   className="flex-1 p-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                   onKeyDown={(e) => {
+                                                       if (e.key === 'Enter') {
+                                                           e.preventDefault();
+                                                           handleAddTableColumnOption(index, colIdx, e.currentTarget.value);
+                                                           e.currentTarget.value = '';
+                                                       }
+                                                   }}
+                                                 />
+                                                 <button 
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                                        handleAddTableColumnOption(index, colIdx, input.value);
+                                                        input.value = '';
+                                                    }}
+                                                    className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium hover:bg-gray-200"
+                                                 >
+                                                     추가
+                                                 </button>
+                                             </div>
+                                         </div>
+                                     )}
                                  </div>
                              ))}
                          </div>
