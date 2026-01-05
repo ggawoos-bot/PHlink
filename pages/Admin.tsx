@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3 } from 'lucide-react';
 import { answerSurveyQnA, clearSurveyQnAAnswer, deleteSurveyById, deleteSurveyQnAById, listSurveyQnAs, listSurveySubmissions, listSurveys } from '../services/surveys';
-
-import { Survey, SurveyQnAPost, SurveySubmission } from '../types';
+import * as XLSX from 'xlsx';
+import { Survey, SurveyQnAPost, SurveySubmission, TableRow } from '../types';
 import { supabase } from '../services/supabaseClient';
+import organizationsData from '../org/organizations.generated.json';
 
 const getSurveyPeriodLabel = (s: any) => {
   const start = s?.startAt ? String(s.startAt).replace('T', ' ') : '';
@@ -70,14 +71,16 @@ const Admin: React.FC = () => {
 
   const handleSurveyExport = () => {
     if (!currentSurvey) return;
-    // Build headers dynamically
-    const fieldHeaders = currentSurvey.fields.map(f => f.label);
-    const headers = ['기관명', ...fieldHeaders, '제출일시'];
-    const rows = submissions.map(sub => {
-      const fieldValues = currentSurvey.fields.map(f => {
+    
+    const workbook = XLSX.utils.book_new();
+    
+    // Sheet 1: Summary data (non-table fields)
+    const nonTableFields = currentSurvey.fields.filter(f => f.type !== 'table');
+    const summaryHeaders = ['기관명', ...nonTableFields.map(f => f.label), '제출일시'];
+    const summaryRows = submissions.map(sub => {
+      const fieldValues = nonTableFields.map(f => {
         const val = sub.data[f.id];
-        // Handle arrays (multiselect) by joining with comma
-        if (Array.isArray(val)) return `"${val.join(', ')}"`;
+        if (Array.isArray(val)) return val.join(', ');
         return val || '';
       });
       return [
@@ -86,7 +89,47 @@ const Admin: React.FC = () => {
         new Date(sub.submittedAt).toLocaleString('ko-KR')
       ];
     });
-    downloadCsv(headers, rows, `취합자료_${currentSurvey.title}`);
+    
+    const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, '요약');
+    
+    // Sheet 2+: Table fields (one sheet per table field)
+    const tableFields = currentSurvey.fields.filter(f => f.type === 'table');
+    tableFields.forEach(field => {
+      const tableRows: any[][] = [];
+      
+      // Headers: 시도, 기관유형, 기관명, ...table columns
+      const tableHeaders = ['시도', '기관유형', '기관명', ...(field.columns?.map(col => col.label) || [])];
+      tableRows.push(tableHeaders);
+      
+      // Data rows
+      submissions.forEach(sub => {
+        const org = organizationsData.find(o => o.orgName === sub.agencyName);
+        const region = org?.region || '';
+        const orgType = org?.orgType || '';
+        
+        const tableData = sub.data[field.id] as TableRow[] | undefined;
+        if (tableData && Array.isArray(tableData)) {
+          tableData.forEach(row => {
+            const rowData = [
+              region,
+              orgType,
+              sub.agencyName,
+              ...(field.columns?.map(col => row.data?.[col.id] || '') || [])
+            ];
+            tableRows.push(rowData);
+          });
+        }
+      });
+      
+      const tableSheet = XLSX.utils.aoa_to_sheet(tableRows);
+      // Sheet name limited to 31 characters
+      const sheetName = field.label.substring(0, 31);
+      XLSX.utils.book_append_sheet(workbook, tableSheet, sheetName);
+    });
+    
+    // Download the workbook
+    XLSX.writeFile(workbook, `취합자료_${currentSurvey.title}.xlsx`);
   };
 
   const handleSurveyEdit = () => {
