@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode } from 'lucide-react';
+import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3 } from 'lucide-react';
 import { answerSurveyQnA, clearSurveyQnAAnswer, deleteSurveyById, deleteSurveyQnAById, listSurveyQnAs, listSurveySubmissions, listSurveys } from '../services/surveys';
 
 import { Survey, SurveyQnAPost, SurveySubmission } from '../types';
@@ -22,6 +22,7 @@ const Admin: React.FC = () => {
   const [surveyQnAs, setSurveyQnAs] = useState<SurveyQnAPost[]>([]);
   const [surveyReplyText, setSurveyReplyText] = useState<Record<string, string>>({});
   const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<SurveySubmission | null>(null);
 
   const loadSurveys = async (keepSelectedId?: string) => {
     try {
@@ -205,6 +206,12 @@ const Admin: React.FC = () => {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-6">
             <h1 className="text-xl font-bold text-gray-900">관리자 대시보드</h1>
+            <button
+              onClick={() => navigate('/admin/statistics')}
+              className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-700 rounded-md text-sm border border-purple-200 hover:bg-purple-100 transition-colors"
+            >
+              <BarChart3 size={16} /> 통계
+            </button>
           </div>
           
           <div className="flex items-center gap-4">
@@ -320,13 +327,35 @@ const Admin: React.FC = () => {
                         submissions.map((sub) => (
                           <tr key={sub.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 sticky left-0 bg-white z-10 border-r border-gray-100">{sub.agencyName}</td>
-                            {currentSurvey?.fields.map(field => (
-                              <td key={field.id} className="px-6 py-4 whitespace-nowrap text-gray-600">
-                                {Array.isArray(sub.data[field.id]) 
-                                  ? (sub.data[field.id] as string[]).join(', ') 
-                                  : sub.data[field.id]}
-                              </td>
-                            ))}
+                            {currentSurvey?.fields.map(field => {
+                              const value = sub.data[field.id];
+                              let displayValue = '';
+                              
+                              if (field.type === 'table' && Array.isArray(value)) {
+                                // Table data: show row count
+                                displayValue = `${value.length}개 행`;
+                              } else if (Array.isArray(value)) {
+                                // Multiselect
+                                displayValue = value.join(', ');
+                              } else {
+                                displayValue = value || '';
+                              }
+                              
+                              return (
+                                <td key={field.id} className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                  {field.type === 'table' && Array.isArray(value) && value.length > 0 ? (
+                                    <button
+                                      onClick={() => setSelectedSubmission(sub)}
+                                      className="text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1"
+                                    >
+                                      <Eye size={14} /> {displayValue}
+                                    </button>
+                                  ) : (
+                                    displayValue
+                                  )}
+                                </td>
+                              );
+                            })}
                             <td className="px-6 py-4 whitespace-nowrap text-right text-gray-400 text-xs">
                               {new Date(sub.submittedAt).toLocaleString('ko-KR')}
                             </td>
@@ -410,6 +439,77 @@ const Admin: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Submission Detail Modal */}
+      {selectedSubmission && currentSurvey && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden transform transition-all scale-100">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                <FileText size={20} className="text-indigo-600" /> {selectedSubmission.agencyName} - 제출 상세
+              </h3>
+              <button
+                onClick={() => setSelectedSubmission(null)}
+                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              <div className="space-y-6">
+                {currentSurvey.fields.map(field => {
+                  const value = selectedSubmission.data[field.id];
+                  
+                  return (
+                    <div key={field.id} className="border-b border-gray-100 pb-4 last:border-0">
+                      <h4 className="font-bold text-gray-900 mb-2">{field.label}</h4>
+                      
+                      {field.type === 'table' && Array.isArray(value) ? (
+                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                          <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-xs font-bold text-gray-500">#</th>
+                                {field.columns?.map(col => (
+                                  <th key={col.id} className="px-4 py-2 text-left text-xs font-bold text-gray-500">
+                                    {col.label}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {value.map((row: any, idx: number) => (
+                                <tr key={row.id || idx} className="hover:bg-gray-50">
+                                  <td className="px-4 py-2 text-gray-600">{idx + 1}</td>
+                                  {field.columns?.map(col => (
+                                    <td key={col.id} className="px-4 py-2 text-gray-600">
+                                      {row.data?.[col.id] || ''}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : Array.isArray(value) ? (
+                        <div className="flex flex-wrap gap-2">
+                          {value.map((v, idx) => (
+                            <span key={idx} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm">
+                              {v}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-600">{value || '-'}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Share Modal */}
       {showShareModal && (

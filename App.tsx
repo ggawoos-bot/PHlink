@@ -6,6 +6,7 @@ import SurveyCreate from './pages/SurveyCreate';
 import SurveyList from './pages/SurveyList';
 import SurveySubmit from './pages/SurveySubmit';
 import AdminLogin from './pages/AdminLogin';
+import Statistics from './pages/Statistics';
 import { supabase } from './services/supabaseClient';
 
 const RequireAdmin: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -57,6 +58,7 @@ const App: React.FC = () => {
           <Route path="/" element={<SurveyList />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
+          <Route path="/admin/statistics" element={<RequireAdmin><Statistics /></RequireAdmin>} />
           <Route path="/admin/survey/create" element={<RequireAdmin><SurveyCreate /></RequireAdmin>} />
           <Route path="/admin/survey/edit/:id" element={<RequireAdmin><SurveyCreate /></RequireAdmin>} />
           <Route path="/surveys" element={<SurveyList />} />
