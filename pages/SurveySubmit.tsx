@@ -465,8 +465,8 @@ const SurveySubmit: React.FC = () => {
             
             <div className="space-y-6">
                 {survey.fields.map(field => (
-                    <div key={field.id} className="pb-4 border-b border-gray-100 last:border-0 last:pb-0">
-                        <label className="block text-sm font-bold text-gray-800 mb-1.5">
+                    <div key={field.id} className={`pb-4 border-b border-gray-100 last:border-0 last:pb-0 ${field.type === 'table' ? '-mx-6 px-6 bg-gray-50/50' : ''}`}>
+                        <label className={`block font-bold mb-2 ${field.type === 'table' ? 'text-base text-gray-900 pb-2 border-b-2 border-indigo-200' : 'text-sm text-gray-800 mb-1.5'}`}>
                             {field.label} {field.required && <span className="text-red-500">*</span>}
                         </label>
                         {field.description && <p className="text-xs text-gray-500 mb-2">{field.description}</p>}
