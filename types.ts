@@ -70,3 +70,12 @@ export interface SurveySubmission {
   data: Record<string, any>; // Changed to any to support arrays (multiselect)
   submittedAt: number;
 }
+
+export interface SurveyTemplate {
+  id: string;
+  name: string;
+  description: string;
+  fields: SurveyField[];
+  createdAt: number;
+  updatedAt: number;
+}

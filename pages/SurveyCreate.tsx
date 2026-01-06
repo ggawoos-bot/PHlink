@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Save, Plus, Trash2, ArrowLeft, ClipboardList, Type, Hash, Calendar, List, CheckSquare, AlignLeft, X, Table } from 'lucide-react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Save, Plus, Trash2, ArrowLeft, ClipboardList, Type, Hash, Calendar, List, CheckSquare, AlignLeft, X, Table, ChevronUp, ChevronDown, FileText } from 'lucide-react';
 import { getSurvey, upsertSurvey } from '../services/surveys';
-import { Survey, SurveyField, SurveyFieldType, TableColumn } from '../types';
+import { deleteTemplateById, getTemplate, listTemplates, upsertTemplate } from '../services/templates';
+import { Survey, SurveyField, SurveyFieldType, TableColumn, SurveyTemplate } from '../types';
+import { supabase } from '../services/supabaseClient';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -18,7 +20,9 @@ const toLocalDateTimeInputValue = (d: Date) => {
 const SurveyCreate: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const isEditMode = Boolean(id);
+  const templateIdFromUrl = searchParams.get('templateId');
 
   // Basic Info
   const [title, setTitle] = useState('');
@@ -34,10 +38,48 @@ const SurveyCreate: React.FC = () => {
     { id: `FLD${Date.now()}`, label: '전화번호', type: 'text', required: true }
   ]);
 
+  // Template
+  const [templates, setTemplates] = useState<SurveyTemplate[]>([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null);
+  const [templateNameInput, setTemplateNameInput] = useState('');
+  const [templateDescriptionInput, setTemplateDescriptionInput] = useState('');
+
+  const reloadTemplates = async () => {
+    try {
+      const data = await listTemplates();
+      setTemplates(data);
+    } catch (e) {
+      console.error('Failed to load templates:', e);
+    }
+  };
+
+  // Load templates
+  useEffect(() => {
+    reloadTemplates();
+  }, []);
+
+  // Load template from URL parameter
+  useEffect(() => {
+    if (!templateIdFromUrl || isEditMode) return;
+    (async () => {
+      try {
+        const template = await getTemplate(templateIdFromUrl);
+        if (template) {
+          setFields(template.fields);
+        }
+      } catch (e) {
+        console.error('Failed to load template:', e);
+      }
+    })();
+  }, [templateIdFromUrl, isEditMode]);
+
   useEffect(() => {
     if (!isEditMode || !id) return;
     let mounted = true;
-    (async () => {
+    
+    const loadSurvey = async () => {
       try {
         const existing = await getSurvey(id);
         if (!mounted) return;
@@ -61,9 +103,31 @@ const SurveyCreate: React.FC = () => {
         alert('자료 취합 요청 정보를 불러오지 못했습니다.');
         navigate('/admin');
       }
-    })();
+    };
+    
+    loadSurvey();
+    
+    // Realtime 구독: 다른 PC에서 수정 시 자동으로 최신 데이터 반영
+    const channel = supabase
+      .channel(`survey-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'phlink',
+          table: 'surveys',
+          filter: `id=eq.${id}`
+        },
+        () => {
+          console.log('Survey updated by another user, reloading...');
+          loadSurvey();
+        }
+      )
+      .subscribe();
+    
     return () => {
       mounted = false;
+      supabase.removeChannel(channel);
     };
   }, [id, isEditMode, navigate]);
 
@@ -92,6 +156,20 @@ const SurveyCreate: React.FC = () => {
 
   const handleRemoveField = (index: number) => {
     setFields(fields.filter((_, i) => i !== index));
+  };
+
+  const handleMoveFieldUp = (index: number) => {
+    if (index === 0) return;
+    const newFields = [...fields];
+    [newFields[index - 1], newFields[index]] = [newFields[index], newFields[index - 1]];
+    setFields(newFields);
+  };
+
+  const handleMoveFieldDown = (index: number) => {
+    if (index === fields.length - 1) return;
+    const newFields = [...fields];
+    [newFields[index], newFields[index + 1]] = [newFields[index + 1], newFields[index]];
+    setFields(newFields);
   };
 
   const handleFieldChange = (index: number, key: keyof SurveyField, value: any) => {
@@ -190,6 +268,95 @@ const SurveyCreate: React.FC = () => {
           newFields[fieldIndex].columns![colIndex].options = newFields[fieldIndex].columns![colIndex].options!.filter((_, i) => i !== optionIndex);
       }
       setFields(newFields);
+  };
+
+  const handleLoadTemplate = async (templateId: string) => {
+    try {
+      const template = await getTemplate(templateId);
+      if (template) {
+        setFields(template.fields);
+        setShowTemplateModal(false);
+        alert(`'${template.name}' 템플릿이 적용되었습니다.`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('템플릿을 불러오지 못했습니다.');
+    }
+  };
+
+  const handleSaveTemplateAsNew = async () => {
+    const name = templateNameInput.trim();
+    if (!name) {
+      alert('템플릿 이름을 입력해주세요.');
+      return;
+    }
+
+    setTemplateSaving(true);
+    try {
+      const ts = Date.now();
+      const template: SurveyTemplate = {
+        id: `TPL${ts}`,
+        name,
+        description: templateDescriptionInput ?? '',
+        fields,
+        createdAt: ts,
+        updatedAt: ts,
+      };
+      await upsertTemplate(template);
+      await reloadTemplates();
+      setTemplateNameInput('');
+      setTemplateDescriptionInput('');
+      alert('템플릿이 저장되었습니다.');
+    } catch (e) {
+      console.error(e);
+      alert('템플릿 저장에 실패했습니다.');
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
+  const handleOverwriteTemplate = async (templateId: string) => {
+    const target = templates.find(t => t.id === templateId);
+    if (!target) return;
+    const ok = window.confirm(`'${target.name}' 템플릿을 현재 빌더 내용으로 덮어쓸까요?`);
+    if (!ok) return;
+
+    setTemplateSaving(true);
+    try {
+      const next: SurveyTemplate = {
+        ...target,
+        description: target.description ?? '',
+        fields,
+        updatedAt: Date.now(),
+      };
+      await upsertTemplate(next);
+      await reloadTemplates();
+      alert('템플릿이 업데이트되었습니다.');
+    } catch (e) {
+      console.error(e);
+      alert('템플릿 업데이트에 실패했습니다.');
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    const target = templates.find(t => t.id === templateId);
+    if (!target) return;
+    const ok = window.confirm(`'${target.name}' 템플릿을 삭제할까요?`);
+    if (!ok) return;
+
+    setTemplateDeletingId(templateId);
+    try {
+      await deleteTemplateById(templateId);
+      await reloadTemplates();
+      alert('템플릿이 삭제되었습니다.');
+    } catch (e) {
+      console.error(e);
+      alert('템플릿 삭제에 실패했습니다.');
+    } finally {
+      setTemplateDeletingId(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -358,18 +525,58 @@ const SurveyCreate: React.FC = () => {
              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                <ClipboardList className="text-indigo-600" size={24} /> 취합 양식 빌더
              </h2>
-             <button 
-                onClick={handleAddField}
-                type="button"
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold hover:bg-indigo-100 border border-indigo-200 transition-colors"
-             >
-               <Plus size={16} /> 항목 추가
-             </button>
+             <div className="flex gap-2">
+               <button 
+                  onClick={() => setShowTemplateModal(true)}
+                  type="button"
+                  className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold hover:bg-green-100 border border-green-200 transition-colors"
+                >
+                  <FileText size={16} /> 템플릿 관리
+                </button>
+               {!isEditMode && (
+                 <button 
+                    onClick={() => setShowTemplateModal(true)}
+                    type="button"
+                    disabled={templates.length === 0}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm font-bold hover:bg-purple-100 border border-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   <FileText size={16} /> 템플릿 불러오기
+                 </button>
+               )}
+               <button 
+                  onClick={handleAddField}
+                  type="button"
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold hover:bg-indigo-100 border border-indigo-200 transition-colors"
+               >
+                 <Plus size={16} /> 항목 추가
+               </button>
+             </div>
            </div>
            
            <div className="space-y-6">
              {fields.map((field, index) => (
                <div key={field.id} className="relative p-6 border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-gray-50 hover:border-indigo-300 transition-all group shadow-sm">
+                 {/* Order Control Buttons */}
+                 <div className="absolute -left-3 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-100 md:opacity-70 md:group-hover:opacity-100 transition-opacity">
+                   <button
+                     type="button"
+                     onClick={() => handleMoveFieldUp(index)}
+                     disabled={index === 0}
+                     className="p-1.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-indigo-50 hover:border-indigo-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                     title="위로 이동"
+                   >
+                     <ChevronUp size={16} className="text-gray-600" />
+                   </button>
+                   <button
+                     type="button"
+                     onClick={() => handleMoveFieldDown(index)}
+                     disabled={index === fields.length - 1}
+                     className="p-1.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-indigo-50 hover:border-indigo-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                     title="아래로 이동"
+                   >
+                     <ChevronDown size={16} className="text-gray-600" />
+                   </button>
+                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                     {/* Label & Description */}
                     <div className="md:col-span-7 space-y-3">
@@ -525,7 +732,7 @@ const SurveyCreate: React.FC = () => {
                                                         handleAddTableColumnOption(index, colIdx, input.value);
                                                         input.value = '';
                                                     }}
-                                                    className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium hover:bg-gray-200"
+                                                    className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-bold hover:bg-gray-200"
                                                  >
                                                      추가
                                                  </button>
@@ -629,6 +836,126 @@ const SurveyCreate: React.FC = () => {
            </div>
         </section>
       </div>
+
+      {/* Template Selection Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden transform transition-all scale-100">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                <FileText size={20} className="text-purple-600" /> 템플릿 관리 (취합양식 빌더)
+              </h3>
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-80px)]">
+              <div className="border border-gray-200 rounded-xl p-4 bg-white mb-6">
+                <div className="flex items-center justify-between gap-4 mb-3">
+                  <div className="font-bold text-gray-900">현재 빌더를 새 템플릿으로 저장</div>
+                  <div className="text-xs text-gray-500">현재 항목 수: {fields.length}개</div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">템플릿 이름</label>
+                    <input
+                      type="text"
+                      value={templateNameInput}
+                      onChange={e => setTemplateNameInput(e.target.value)}
+                      placeholder="예: 직원 인력 현황(기본형)"
+                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">설명 (선택)</label>
+                    <input
+                      type="text"
+                      value={templateDescriptionInput}
+                      onChange={e => setTemplateDescriptionInput(e.target.value)}
+                      placeholder="예: 공통 질문/테이블 포함"
+                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSaveTemplateAsNew}
+                    disabled={templateSaving}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Save size={16} /> 저장
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-bold text-gray-900">저장된 템플릿</div>
+                <button
+                  type="button"
+                  onClick={reloadTemplates}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-sm font-bold hover:bg-gray-200"
+                >
+                  새로고침
+                </button>
+              </div>
+
+              {templates.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FileText className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                  <p>등록된 템플릿이 없습니다.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {templates.map(template => (
+                    <div key={template.id} className="border border-gray-200 rounded-lg p-4 hover:border-purple-300 transition-all">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-gray-900 mb-1 truncate">{template.name}</h4>
+                          <p className="text-sm text-gray-500 mb-2 break-words">{template.description}</p>
+                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                            <span>{template.fields.length}개 항목</span>
+                            <span>•</span>
+                            <span>수정: {new Date(template.updatedAt).toLocaleDateString('ko-KR')}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleLoadTemplate(template.id)}
+                            className="px-3 py-2 bg-purple-50 text-purple-700 rounded text-sm font-bold hover:bg-purple-100 border border-purple-200"
+                          >
+                            적용
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOverwriteTemplate(template.id)}
+                            disabled={templateSaving}
+                            className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded text-sm font-bold hover:bg-indigo-100 border border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            덮어쓰기
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTemplate(template.id)}
+                            disabled={templateDeletingId === template.id}
+                            className="px-3 py-2 bg-white text-red-600 rounded text-sm font-bold hover:bg-red-50 border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

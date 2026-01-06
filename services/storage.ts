@@ -128,7 +128,10 @@ const toLocalDateTimeInputValue = (d: Date) => {
 };
 
 // --- Surveys (Data Collection) ---
+// @deprecated Use services/surveys.ts (Supabase) instead
+// These localStorage functions are kept for backward compatibility only
 export const getSurveys = (): Survey[] => {
+  console.warn('DEPRECATED: getSurveys from storage.ts. Use listSurveys from services/surveys.ts instead.');
   const data = localStorage.getItem(SURVEYS_KEY);
   const surveys: Survey[] = data ? JSON.parse(data) : [];
   return surveys.map((s: any) => {
@@ -147,12 +150,16 @@ export const getSurveys = (): Survey[] => {
   });
 };
 
+// @deprecated Use services/surveys.ts (Supabase) instead
 export const getSurveyById = (id: string): Survey | undefined => {
+  console.warn('DEPRECATED: getSurveyById from storage.ts. Use getSurvey from services/surveys.ts instead.');
   const surveys = getSurveys();
   return surveys.find(s => s.id === id);
 };
 
+// @deprecated Use services/surveys.ts (Supabase) instead
 export const saveSurvey = (survey: Survey) => {
+  console.warn('DEPRECATED: saveSurvey from storage.ts. Use upsertSurvey from services/surveys.ts instead.');
   const surveys = getSurveys();
   const index = surveys.findIndex(s => s.id === survey.id);
   if (index >= 0) {
@@ -163,7 +170,9 @@ export const saveSurvey = (survey: Survey) => {
   localStorage.setItem(SURVEYS_KEY, JSON.stringify(surveys));
 };
 
+// @deprecated Use services/surveys.ts (Supabase) instead
 export const deleteSurvey = (surveyId: string) => {
+  console.warn('DEPRECATED: deleteSurvey from storage.ts. Use deleteSurveyById from services/surveys.ts instead.');
   const surveys = getSurveys().filter(s => s.id !== surveyId);
   localStorage.setItem(SURVEYS_KEY, JSON.stringify(surveys));
 
