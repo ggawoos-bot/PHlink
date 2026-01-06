@@ -55,7 +55,8 @@ const SurveySubmit: React.FC = () => {
     (async () => {
       try {
         const s = await getSurvey(id);
-        const q = await listSurveyQnAs(id);
+        const qnaEnabled = s?.qnaEnabled ?? true;
+        const q = qnaEnabled ? await listSurveyQnAs(id) : [];
         if (!mounted) return;
         setSurvey(s ?? undefined);
         setQnAs(q);
@@ -141,6 +142,10 @@ const SurveySubmit: React.FC = () => {
 
   async function handleSubmitQuestion(e: React.FormEvent) {
     e.preventDefault();
+    if (!survey?.qnaEnabled) {
+      alert('문의/답변 기능이 비활성화되어 있습니다.');
+      return;
+    }
     if (!id || !qAuthor || !qPassword || !qQuestion) {
       alert('모든 항목을 입력해주세요.');
       return;
@@ -716,88 +721,90 @@ const SurveySubmit: React.FC = () => {
          </div>
       </form>
 
-      <section className="mt-10">
-        <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <MessageSquare size={20} className="text-indigo-600" /> 문의/답변
-        </h2>
+      {(survey.qnaEnabled ?? true) && (
+        <section className="mt-10">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <MessageSquare size={20} className="text-indigo-600" /> 문의/답변
+          </h2>
 
-        <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 mb-6">
-          <h3 className="font-bold text-sm text-gray-700 mb-4 flex items-center gap-2">
-            <MessageSquare size={16} /> 문의 남기기
-          </h3>
-          <form onSubmit={handleSubmitQuestion} className="space-y-3">
-            <div className="flex gap-3">
-              <input
-                type="text"
-                placeholder="작성자명"
-                value={qAuthor}
-                onChange={(e) => setQAuthor(e.target.value)}
-                className="flex-1 p-2 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
-                autoComplete="off"
+          <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 mb-6">
+            <h3 className="font-bold text-sm text-gray-700 mb-4 flex items-center gap-2">
+              <MessageSquare size={16} /> 문의 남기기
+            </h3>
+            <form onSubmit={handleSubmitQuestion} className="space-y-3">
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="작성자명"
+                  value={qAuthor}
+                  onChange={(e) => setQAuthor(e.target.value)}
+                  className="flex-1 p-2 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
+                  autoComplete="off"
+                  required
+                />
+                <input
+                  type="password"
+                  placeholder="비밀번호(수정/삭제용)"
+                  value={qPassword}
+                  onChange={(e) => setQPassword(e.target.value)}
+                  className="flex-1 p-2 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+              <textarea
+                placeholder="문의하실 내용을 입력해주세요."
+                value={qQuestion}
+                onChange={(e) => setQQuestion(e.target.value)}
+                rows={3}
+                className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500 resize-none"
                 required
               />
-              <input
-                type="password"
-                placeholder="비밀번호(수정/삭제용)"
-                value={qPassword}
-                onChange={(e) => setQPassword(e.target.value)}
-                className="flex-1 p-2 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
-                autoComplete="new-password"
-                required
-              />
-            </div>
-            <textarea
-              placeholder="문의하실 내용을 입력해주세요."
-              value={qQuestion}
-              onChange={(e) => setQQuestion(e.target.value)}
-              rows={3}
-              className="w-full p-2 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500 resize-none"
-              required
-            />
-            <div className="text-right">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2 ml-auto"
-              >
-                <Send size={14} /> 등록
-              </button>
-            </div>
-          </form>
-        </div>
+              <div className="text-right">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2 ml-auto"
+                >
+                  <Send size={14} /> 등록
+                </button>
+              </div>
+            </form>
+          </div>
 
-        <div className="space-y-4">
-          {qnas.length === 0 ? (
-            <p className="text-center text-gray-400 py-4">등록된 문의가 없습니다.</p>
-          ) : (
-            qnas.map(qna => (
-              <div key={qna.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="bg-gray-100 p-1 rounded-full"><User size={14} className="text-gray-500"/></div>
-                    <span className="font-bold text-gray-900 text-sm">{qna.authorName}</span>
-                    <span className="text-xs text-gray-400">{new Date(qna.createdAt).toLocaleDateString()}</span>
+          <div className="space-y-4">
+            {qnas.length === 0 ? (
+              <p className="text-center text-gray-400 py-4">등록된 문의가 없습니다.</p>
+            ) : (
+              qnas.map(qna => (
+                <div key={qna.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="bg-gray-100 p-1 rounded-full"><User size={14} className="text-gray-500"/></div>
+                      <span className="font-bold text-gray-900 text-sm">{qna.authorName}</span>
+                      <span className="text-xs text-gray-400">{new Date(qna.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    {qna.answer ? (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">답변완료</span>
+                    ) : (
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">대기중</span>
+                    )}
                   </div>
-                  {qna.answer ? (
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">답변완료</span>
-                  ) : (
-                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">대기중</span>
+                  <p className="text-gray-700 text-sm mb-3 whitespace-pre-wrap">{qna.question}</p>
+
+                  {qna.answer && (
+                    <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 text-sm">
+                      <div className="font-bold text-indigo-800 mb-1 flex items-center gap-1">
+                        ↳ 담당자 답변
+                      </div>
+                      <p className="text-gray-700 whitespace-pre-wrap">{qna.answer}</p>
+                    </div>
                   )}
                 </div>
-                <p className="text-gray-700 text-sm mb-3 whitespace-pre-wrap">{qna.question}</p>
-
-                {qna.answer && (
-                  <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 text-sm">
-                    <div className="font-bold text-indigo-800 mb-1 flex items-center gap-1">
-                      ↳ 담당자 답변
-                    </div>
-                    <p className="text-gray-700 whitespace-pre-wrap">{qna.answer}</p>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+              ))
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Share Modal */}
       {showShareModal && (

@@ -37,6 +37,7 @@ type SurveyRow = {
   end_at: string | null;
   fields: any;
   target_org_types?: string[] | null;
+  qna_enabled?: boolean | null;
   created_at: string | null;
 };
 
@@ -57,6 +58,7 @@ const mapSurveyRowToSurvey = (row: SurveyRow): Survey => {
     status: row.status === 'CLOSED' ? 'CLOSED' : 'OPEN',
     createdAt: createdAtMs,
     targetOrgTypes: row.target_org_types ?? undefined,
+    qnaEnabled: row.qna_enabled ?? true,
   };
 };
 
@@ -64,7 +66,7 @@ export const listSurveys = async (): Promise<Survey[]> => {
   const { data, error } = await supabase
     .schema('phlink')
     .from('surveys')
-    .select('id,title,description,host,status,start_at,end_at,fields,target_org_types,created_at')
+    .select('id,title,description,host,status,start_at,end_at,fields,target_org_types,qna_enabled,created_at')
     .order('start_at', { ascending: true });
 
   if (error) throw error;
@@ -75,7 +77,7 @@ export const getSurvey = async (id: string): Promise<Survey | null> => {
   const { data, error } = await supabase
     .schema('phlink')
     .from('surveys')
-    .select('id,title,description,host,status,start_at,end_at,fields,target_org_types,created_at')
+    .select('id,title,description,host,status,start_at,end_at,fields,target_org_types,qna_enabled,created_at')
     .eq('id', id)
     .maybeSingle();
 
@@ -95,6 +97,7 @@ export const upsertSurvey = async (survey: Survey): Promise<void> => {
     end_at: parseLocalDateTimeToIso(survey.endAt),
     fields: survey.fields ?? [],
     target_org_types: survey.targetOrgTypes && survey.targetOrgTypes.length > 0 ? survey.targetOrgTypes : null,
+    qna_enabled: survey.qnaEnabled ?? true,
     created_at: new Date(survey.createdAt).toISOString(),
   };
 

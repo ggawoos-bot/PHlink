@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3 } from 'lucide-react';
+import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3, Building2 } from 'lucide-react';
 import { answerSurveyQnA, clearSurveyQnAAnswer, deleteSurveyById, deleteSurveyQnAById, listSurveyQnAs, listSurveySubmissions, listSurveys } from '../services/surveys';
 import * as XLSX from 'xlsx';
 import { Survey, SurveyQnAPost, SurveySubmission, TableRow } from '../types';
@@ -38,11 +38,11 @@ const Admin: React.FC = () => {
     }
   };
 
-  const loadSurveySubmissionsAndQnAs = async (surveyId: string) => {
+  const loadSurveySubmissionsAndQnAs = async (surveyId: string, qnaEnabled: boolean) => {
     try {
       const [subs, qnas] = await Promise.all([
         listSurveySubmissions(surveyId),
-        listSurveyQnAs(surveyId),
+        qnaEnabled ? listSurveyQnAs(surveyId) : Promise.resolve([] as any),
       ]);
       setSubmissions(subs);
       setSurveyQnAs(qnas);
@@ -57,17 +57,18 @@ const Admin: React.FC = () => {
     loadSurveys();
   }, []);
 
-  useEffect(() => {
-    if (selectedSurveyId) {
-      loadSurveySubmissionsAndQnAs(selectedSurveyId);
-    }
-  }, [selectedSurveyId]);
-
   const reloadSurveys = (keepSelectedId?: string) => {
     loadSurveys(keepSelectedId);
   };
 
   const currentSurvey = surveys.find(s => s.id === selectedSurveyId);
+  const qnaEnabled = currentSurvey?.qnaEnabled ?? true;
+
+  useEffect(() => {
+    if (selectedSurveyId) {
+      loadSurveySubmissionsAndQnAs(selectedSurveyId, qnaEnabled);
+    }
+  }, [selectedSurveyId, qnaEnabled]);
 
   const handleSurveyExport = () => {
     if (!currentSurvey) return;
@@ -255,6 +256,12 @@ const Admin: React.FC = () => {
             >
               <BarChart3 size={16} /> 통계
             </button>
+            <button
+              onClick={() => navigate('/admin/organizations')}
+              className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-md text-sm border border-indigo-200 hover:bg-indigo-100 transition-colors"
+            >
+              <Building2 size={16} /> 기관관리
+            </button>
           </div>
           
           <div className="flex items-center gap-4">
@@ -410,74 +417,76 @@ const Admin: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <div className="flex items-center gap-2 mb-6">
-                  <MessageCircle className="text-indigo-600" size={24} />
-                  <h3 className="font-bold text-gray-900 text-lg">문의사항 관리</h3>
-                </div>
-                <div className="space-y-4">
-                  {surveyQnAs.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">등록된 문의사항이 없습니다.</p>
-                  ) : (
-                    surveyQnAs.map((qna) => (
-                      <div key={qna.id} className={`border rounded-lg p-4 ${qna.answer ? 'bg-gray-50 border-gray-200' : 'bg-white border-indigo-200 shadow-sm'}`}>
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-800">{qna.authorName}</span>
-                            <span className="text-xs text-gray-500">{new Date(qna.createdAt).toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {!qna.answer && <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-bold">답변대기</span>}
-                            {qna.answer && <span className="bg-green-100 text-green-600 text-xs px-2 py-1 rounded-full font-bold">답변완료</span>}
-                            <button
-                              onClick={() => handleSurveyQnADelete(qna)}
-                              className="px-2 py-1 text-xs font-bold rounded border border-red-200 text-red-600 hover:bg-red-50"
-                              title="문의글 삭제"
-                            >
-                              삭제
-                            </button>
-                          </div>
-                        </div>
-                        <p className="text-gray-700 mb-4 whitespace-pre-wrap">{qna.question}</p>
-
-                        <div className="space-y-2">
-                          {qna.answer && (
-                            <div className="bg-white border border-gray-200 p-3 rounded text-sm">
-                              <span className="font-bold text-gray-900">현재 답변: </span>
-                              <span className="text-gray-600 whitespace-pre-wrap">{qna.answer}</span>
+              {qnaEnabled && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex items-center gap-2 mb-6">
+                    <MessageCircle className="text-indigo-600" size={24} />
+                    <h3 className="font-bold text-gray-900 text-lg">문의사항 관리</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {surveyQnAs.length === 0 ? (
+                      <p className="text-gray-500 text-center py-4">등록된 문의사항이 없습니다.</p>
+                    ) : (
+                      surveyQnAs.map((qna) => (
+                        <div key={qna.id} className={`border rounded-lg p-4 ${qna.answer ? 'bg-gray-50 border-gray-200' : 'bg-white border-indigo-200 shadow-sm'}`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-800">{qna.authorName}</span>
+                              <span className="text-xs text-gray-500">{new Date(qna.createdAt).toLocaleString()}</span>
                             </div>
-                          )}
-                          <div className="flex gap-2 items-start">
-                            <textarea
-                              className="flex-grow p-2 border border-gray-300 rounded text-sm outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
-                              rows={2}
-                              placeholder={qna.answer ? '답변을 수정하세요...' : '답변 내용을 입력하세요...'}
-                              value={surveyReplyText[qna.id] ?? (qna.answer ?? '')}
-                              onChange={(e) => setSurveyReplyText({ ...surveyReplyText, [qna.id]: e.target.value })}
-                            />
-                            <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              {!qna.answer && <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-bold">답변대기</span>}
+                              {qna.answer && <span className="bg-green-100 text-green-600 text-xs px-2 py-1 rounded-full font-bold">답변완료</span>}
                               <button
-                                onClick={() => handleSurveyReplySubmit(qna)}
-                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded hover:bg-indigo-700 whitespace-nowrap"
+                                onClick={() => handleSurveyQnADelete(qna)}
+                                className="px-2 py-1 text-xs font-bold rounded border border-red-200 text-red-600 hover:bg-red-50"
+                                title="문의글 삭제"
                               >
-                                {qna.answer ? '수정' : '등록'}
+                                삭제
                               </button>
-                              {qna.answer && (
+                            </div>
+                          </div>
+                          <p className="text-gray-700 mb-4 whitespace-pre-wrap">{qna.question}</p>
+
+                          <div className="space-y-2">
+                            {qna.answer && (
+                              <div className="bg-white border border-gray-200 p-3 rounded text-sm">
+                                <span className="font-bold text-gray-900">현재 답변: </span>
+                                <span className="text-gray-600 whitespace-pre-wrap">{qna.answer}</span>
+                              </div>
+                            )}
+                            <div className="flex gap-2 items-start">
+                              <textarea
+                                className="flex-grow p-2 border border-gray-300 rounded text-sm outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                                rows={2}
+                                placeholder={qna.answer ? '답변을 수정하세요...' : '답변 내용을 입력하세요...'}
+                                value={surveyReplyText[qna.id] ?? (qna.answer ?? '')}
+                                onChange={(e) => setSurveyReplyText({ ...surveyReplyText, [qna.id]: e.target.value })}
+                              />
+                              <div className="flex flex-col gap-2">
                                 <button
-                                  onClick={() => handleSurveyAnswerClear(qna)}
-                                  className="px-4 py-2 bg-white text-gray-700 text-sm font-bold rounded border border-gray-300 hover:bg-gray-50 whitespace-nowrap"
+                                  onClick={() => handleSurveyReplySubmit(qna)}
+                                  className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded hover:bg-indigo-700 whitespace-nowrap"
                                 >
-                                  답변삭제
+                                  {qna.answer ? '수정' : '등록'}
                                 </button>
-                              )}
+                                {qna.answer && (
+                                  <button
+                                    onClick={() => handleSurveyAnswerClear(qna)}
+                                    className="px-4 py-2 bg-white text-gray-700 text-sm font-bold rounded border border-gray-300 hover:bg-gray-50 whitespace-nowrap"
+                                  >
+                                    답변삭제
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>

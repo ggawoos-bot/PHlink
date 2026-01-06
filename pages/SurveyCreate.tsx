@@ -34,6 +34,7 @@ const SurveyCreate: React.FC = () => {
   const [createdAt, setCreatedAt] = useState<number>(Date.now());
   const [status, setStatus] = useState<'OPEN' | 'CLOSED'>('OPEN');
   const [targetOrgTypes, setTargetOrgTypes] = useState<string[]>([]);
+  const [qnaEnabled, setQnaEnabled] = useState<boolean>(true);
 
   const allOrgTypes = Array.from(new Set((organizationsData ?? []).map((o: any) => o?.orgType).filter(Boolean))).sort();
 
@@ -111,6 +112,7 @@ const SurveyCreate: React.FC = () => {
         setCreatedAt(existing.createdAt);
         setStatus(existing.status);
         setTargetOrgTypes(existing.targetOrgTypes ?? []);
+        setQnaEnabled(existing.qnaEnabled ?? true);
       } catch (e) {
         console.error(e);
         if (!mounted) return;
@@ -415,7 +417,8 @@ const SurveyCreate: React.FC = () => {
       fields,
       targetOrgTypes,
       status,
-      createdAt
+      createdAt,
+      qnaEnabled,
     };
 
     try {
@@ -575,6 +578,19 @@ const SurveyCreate: React.FC = () => {
                 placeholder="조사 목적이나 작성 시 유의사항을 입력하세요."
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none resize-none transition-shadow"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">문의/답변 기능</label>
+              <label className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={qnaEnabled}
+                  onChange={(e) => setQnaEnabled(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                />
+                문의/답변 활성화
+              </label>
+              <div className="text-xs text-gray-500 mt-1">체크 해제 시 제출자 화면에서 문의/답변 영역이 표시되지 않습니다.</div>
             </div>
           </div>
         </section>

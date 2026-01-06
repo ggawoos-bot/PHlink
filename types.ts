@@ -61,6 +61,7 @@ export interface Survey {
   status: 'OPEN' | 'CLOSED';
   createdAt: number;
   targetOrgTypes?: string[];
+  qnaEnabled?: boolean;
 }
 
 export interface SurveySubmission {
