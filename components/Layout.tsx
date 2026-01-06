@@ -1,6 +1,7 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, LayoutDashboard } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,11 +10,72 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const [adminAccountLabel, setAdminAccountLabel] = React.useState<string>('');
+  const [isAdmin, setIsAdmin] = React.useState<boolean>(false);
+
+  const isAdminUiRoute = location.pathname.startsWith('/admin') && location.pathname !== '/admin/login';
+  const showAdminAccount = isAdmin && location.pathname !== '/admin/login';
 
   const isActive = (path: string) =>
     location.pathname === path
       ? 'text-white font-bold bg-white/15 border border-white/20'
       : 'text-white/90 hover:text-white hover:bg-white/10 border border-transparent';
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    const setFromUser = (u: any) => {
+      const label = u?.email || u?.phone || u?.id || '';
+      if (mounted) setAdminAccountLabel(label);
+    };
+
+    const setFromUserAndProfile = async (u: any) => {
+      setFromUser(u);
+      if (!u?.id) {
+        if (mounted) setIsAdmin(false);
+        return;
+      }
+      try {
+        const { data: profile, error } = await supabase
+          .schema('core')
+          .from('profiles')
+          .select('role')
+          .eq('user_id', u.id)
+          .maybeSingle();
+        if (error) throw error;
+        if (mounted) setIsAdmin(Boolean(profile && profile.role === 'admin'));
+      } catch (e) {
+        console.error(e);
+        if (mounted) setIsAdmin(false);
+      }
+    };
+
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        await setFromUserAndProfile(data?.user);
+      } catch (e) {
+        console.error(e);
+        await setFromUserAndProfile(null);
+      }
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setFromUserAndProfile(session?.user);
+    });
+
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    if (isAdminUiRoute) navigate('/admin/login');
+    else navigate('/');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50/40 flex flex-col font-sans text-slate-900">
@@ -31,21 +93,53 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <span className="w-2 h-2 rounded-full bg-white mb-3 ml-0.5"></span>
             </Link>
 
-            {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-2">
-              <Link to="/" className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${isActive('/')}`}>자료 제출</Link>
-              <Link to="/admin" className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 ${isActive('/admin')}`}>
-                 <LayoutDashboard size={16}/> 관리자 모드
-              </Link>
-            </nav>
+            <div className="flex items-center gap-2">
+              {/* Desktop Nav */}
+              <nav className="hidden md:flex items-center gap-2">
+                <Link to="/" className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${isActive('/')}`}>자료 제출</Link>
+                <Link to="/admin" className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 ${isActive('/admin')}`}>
+                  <LayoutDashboard size={16}/> 관리자 모드
+                </Link>
+              </nav>
 
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 rounded-md text-white/90 hover:text-white hover:bg-white/10 focus:outline-none"
-            >
-              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
+              {/* Admin account + logout (far right) */}
+              {showAdminAccount && (
+                <div className="hidden md:flex items-center gap-2 pl-3 border-l border-white/20">
+                  <div
+                    className="text-[11px] leading-none text-white/90 max-w-[220px] truncate"
+                    title={adminAccountLabel || undefined}
+                  >
+                    {adminAccountLabel || '관리자'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="px-2 py-1 text-[11px] leading-none bg-white/10 text-white rounded border border-white/20 hover:bg-white/15 transition-colors"
+                  >
+                    로그아웃
+                  </button>
+                </div>
+              )}
+
+              {/* Mobile account/logout + menu button */}
+              <div className="flex items-center gap-2 md:hidden">
+                {showAdminAccount && (
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="px-2 py-1 text-[11px] leading-none bg-white/10 text-white rounded border border-white/20 hover:bg-white/15 transition-colors"
+                  >
+                    로그아웃
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className="p-2 rounded-md text-white/90 hover:text-white hover:bg-white/10 focus:outline-none"
+                >
+                  {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

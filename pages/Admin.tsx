@@ -38,21 +38,6 @@ const Admin: React.FC = () => {
     }
   };
 
-  const loadSurveySubmissionsAndQnAs = async (surveyId: string, qnaEnabled: boolean) => {
-    try {
-      const [subs, qnas] = await Promise.all([
-        listSurveySubmissions(surveyId),
-        qnaEnabled ? listSurveyQnAs(surveyId) : Promise.resolve([] as any),
-      ]);
-      setSubmissions(subs);
-      setSurveyQnAs(qnas);
-    } catch (e) {
-      console.error(e);
-      setSubmissions([]);
-      setSurveyQnAs([]);
-    }
-  };
-
   useEffect(() => {
     loadSurveys();
   }, []);
@@ -69,6 +54,21 @@ const Admin: React.FC = () => {
       loadSurveySubmissionsAndQnAs(selectedSurveyId, qnaEnabled);
     }
   }, [selectedSurveyId, qnaEnabled]);
+
+  const loadSurveySubmissionsAndQnAs = async (surveyId: string, qnaEnabled: boolean) => {
+    try {
+      const [subs, qnas] = await Promise.all([
+        listSurveySubmissions(surveyId),
+        qnaEnabled ? listSurveyQnAs(surveyId) : Promise.resolve([] as any),
+      ]);
+      setSubmissions(subs);
+      setSurveyQnAs(qnas);
+    } catch (e) {
+      console.error(e);
+      setSubmissions([]);
+      setSurveyQnAs([]);
+    }
+  };
 
   const handleSurveyExport = () => {
     if (!currentSurvey) return;
@@ -265,12 +265,6 @@ const Admin: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-4">
-            <button
-              onClick={handleLogout}
-              className="px-3 py-2 bg-white text-gray-700 rounded-md text-sm border border-gray-300 hover:bg-gray-50 transition-colors"
-            >
-              로그아웃
-            </button>
             <select 
               className="p-2 border border-gray-300 rounded-md text-sm max-w-xs"
               value={selectedSurveyId}
