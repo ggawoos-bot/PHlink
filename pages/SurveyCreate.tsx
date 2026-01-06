@@ -5,6 +5,7 @@ import { getSurvey, upsertSurvey } from '../services/surveys';
 import { deleteTemplateById, getTemplate, listTemplates, upsertTemplate } from '../services/templates';
 import { Survey, SurveyField, SurveyFieldType, TableColumn, SurveyTemplate } from '../types';
 import { supabase } from '../services/supabaseClient';
+import organizationsData from '../org/organizations.generated.json';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -32,6 +33,18 @@ const SurveyCreate: React.FC = () => {
   const [endAt, setEndAt] = useState('');
   const [createdAt, setCreatedAt] = useState<number>(Date.now());
   const [status, setStatus] = useState<'OPEN' | 'CLOSED'>('OPEN');
+  const [targetOrgTypes, setTargetOrgTypes] = useState<string[]>([]);
+
+  const allOrgTypes = Array.from(new Set((organizationsData ?? []).map((o: any) => o?.orgType).filter(Boolean))).sort();
+
+  const toggleTargetOrgType = (orgType: string, checked: boolean) => {
+    setTargetOrgTypes(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(orgType);
+      else next.delete(orgType);
+      return Array.from(next);
+    });
+  };
 
   // Dynamic Fields
   const [fields, setFields] = useState<SurveyField[]>([
@@ -97,6 +110,7 @@ const SurveyCreate: React.FC = () => {
         setFields(existing.fields);
         setCreatedAt(existing.createdAt);
         setStatus(existing.status);
+        setTargetOrgTypes(existing.targetOrgTypes ?? []);
       } catch (e) {
         console.error(e);
         if (!mounted) return;
@@ -399,6 +413,7 @@ const SurveyCreate: React.FC = () => {
       startAt,
       endAt,
       fields,
+      targetOrgTypes,
       status,
       createdAt
     };
@@ -483,6 +498,51 @@ const SurveyCreate: React.FC = () => {
               <div className="flex items-end">
                 <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3 w-full">
                   제출기간 외에는 자료 제출이 불가능하며, 목록에서 "예정"/"제출 마감"으로 표시됩니다.
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">대상 기관 유형 <span className="text-red-500">*</span></label>
+                <div className="bg-white border border-gray-300 rounded-lg p-3 space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={targetOrgTypes.length === 0}
+                      onChange={(e) => {
+                        if (e.target.checked) setTargetOrgTypes([]);
+                      }}
+                      className="h-4 w-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                    />
+                    전체
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 pt-2 border-t border-gray-100">
+                    {allOrgTypes.map((t: string) => {
+                      const checked = targetOrgTypes.includes(t);
+                      return (
+                        <label key={t} className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (targetOrgTypes.length === 0 && e.target.checked) {
+                                setTargetOrgTypes([t]);
+                                return;
+                              }
+                              toggleTargetOrgType(t, e.target.checked);
+                            }}
+                            className="h-4 w-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                          />
+                          {t}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-end">
+                <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3 w-full">
+                  전체를 선택하면 모든 기관 유형이 제출 대상입니다.
                 </div>
               </div>
             </div>

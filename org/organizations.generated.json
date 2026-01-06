@@ -17044,5 +17044,158 @@
     "orgCode": "1229",
     "orgName": "충북 충주시 중앙탑보건지소",
     "orgType": "보건지소"
+  },
+  {
+    "id": "시도청:SIDO11",
+    "region": "서울",
+    "regionCode": "1100000000",
+    "regionLong": "서울특별시",
+    "orgCode": "SIDO11",
+    "orgName": "서울특별시청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO26",
+    "region": "부산",
+    "regionCode": "2600000000",
+    "regionLong": "부산광역시",
+    "orgCode": "SIDO26",
+    "orgName": "부산광역시청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO27",
+    "region": "대구",
+    "regionCode": "2700000000",
+    "regionLong": "대구광역시",
+    "orgCode": "SIDO27",
+    "orgName": "대구광역시청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO28",
+    "region": "인천",
+    "regionCode": "2800000000",
+    "regionLong": "인천광역시",
+    "orgCode": "SIDO28",
+    "orgName": "인천광역시청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO29",
+    "region": "광주",
+    "regionCode": "2900000000",
+    "regionLong": "광주광역시",
+    "orgCode": "SIDO29",
+    "orgName": "광주광역시청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO30",
+    "region": "대전",
+    "regionCode": "3000000000",
+    "regionLong": "대전광역시",
+    "orgCode": "SIDO30",
+    "orgName": "대전광역시청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO31",
+    "region": "울산",
+    "regionCode": "3100000000",
+    "regionLong": "울산광역시",
+    "orgCode": "SIDO31",
+    "orgName": "울산광역시청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO36",
+    "region": "세종",
+    "regionCode": "3611000000",
+    "regionLong": "세종특별자치시",
+    "orgCode": "SIDO36",
+    "orgName": "세종특별자치시청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO41",
+    "region": "경기",
+    "regionCode": "4100000000",
+    "regionLong": "경기도",
+    "orgCode": "SIDO41",
+    "orgName": "경기도청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO42",
+    "region": "강원",
+    "regionCode": "4200000000",
+    "regionLong": "강원특별자치도",
+    "orgCode": "SIDO42",
+    "orgName": "강원특별자치도청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO43",
+    "region": "충북",
+    "regionCode": "4300000000",
+    "regionLong": "충청북도",
+    "orgCode": "SIDO43",
+    "orgName": "충청북도청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO44",
+    "region": "충남",
+    "regionCode": "4400000000",
+    "regionLong": "충청남도",
+    "orgCode": "SIDO44",
+    "orgName": "충청남도청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO45",
+    "region": "전북",
+    "regionCode": "4500000000",
+    "regionLong": "전북특별자치도",
+    "orgCode": "SIDO45",
+    "orgName": "전북특별자치도청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO46",
+    "region": "전남",
+    "regionCode": "4600000000",
+    "regionLong": "전라남도",
+    "orgCode": "SIDO46",
+    "orgName": "전라남도청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO47",
+    "region": "경북",
+    "regionCode": "4700000000",
+    "regionLong": "경상북도",
+    "orgCode": "SIDO47",
+    "orgName": "경상북도청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO48",
+    "region": "경남",
+    "regionCode": "4800000000",
+    "regionLong": "경상남도",
+    "orgCode": "SIDO48",
+    "orgName": "경상남도청",
+    "orgType": "시도청"
+  },
+  {
+    "id": "시도청:SIDO50",
+    "region": "제주",
+    "regionCode": "5000000000",
+    "regionLong": "제주특별자치도",
+    "orgCode": "SIDO50",
+    "orgName": "제주특별자치도청",
+    "orgType": "시도청"
   }
 ]

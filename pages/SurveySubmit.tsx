@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Check, AlertCircle, Building, Save, Search, Share2, X, Copy, QrCode, Calendar, ChevronDown, MessageSquare, Send, User } from 'lucide-react';
+import { Check, AlertCircle, Building, Save, Search, Share2, X, Copy, QrCode, Calendar, ChevronDown, MessageSquare, Send, User, Download } from 'lucide-react';
 import { createSurveyQnA, getSurvey, listSurveyQnAs } from '../services/surveys';
-import { Survey, Agency, SurveyField, SurveyQnAPost, TableRow } from '../types';
+import { Survey, Agency, SurveyField, SurveyQnAPost, SurveySubmission, TableRow } from '../types';
 import { supabase } from '../services/supabaseClient';
 import organizationsData from '../org/organizations.generated.json';
 import TableEditor from '../components/TableEditor';
+import * as XLSX from 'xlsx';
 
 type SurveyTimingStatus = 'UPCOMING' | 'OPEN' | 'CLOSED';
 
@@ -31,6 +32,7 @@ const SurveySubmit: React.FC = () => {
   const [survey, setSurvey] = useState<Survey | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submittedSubmission, setSubmittedSubmission] = useState<SurveySubmission | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [agencies, setAgencies] = useState<Agency[]>([]);
 
@@ -57,12 +59,11 @@ const SurveySubmit: React.FC = () => {
         if (!mounted) return;
         setSurvey(s ?? undefined);
         setQnAs(q);
-        if (s) {
-          const initialAnswers: Record<string, any> = {};
-          s.fields.forEach(f => {
-            if (f.type === 'multiselect') initialAnswers[f.id] = [];
-          });
-          setAnswers(initialAnswers);
+
+        if (s?.targetOrgTypes && s.targetOrgTypes.length === 1) {
+          setSelectedOrgType(s.targetOrgTypes[0] ?? '');
+        } else if (s?.targetOrgTypes && s.targetOrgTypes.length > 0) {
+          setSelectedOrgType(prev => (prev && s.targetOrgTypes?.includes(prev) ? prev : ''));
         }
       } catch (e) {
         console.error(e);
@@ -76,7 +77,69 @@ const SurveySubmit: React.FC = () => {
     };
   }, [id]);
 
-  const handleSubmitQuestion = async (e: React.FormEvent) => {
+  useEffect(() => {
+    const loadedAgencies = organizationsData.map(org => ({
+      id: org.id,
+      name: org.orgName,
+      region: org.region,
+      regionCode: org.regionCode,
+      regionLong: org.regionLong,
+      orgCode: org.orgCode,
+      orgName: org.orgName,
+      orgType: org.orgType
+    }));
+    setAgencies(loadedAgencies);
+  }, []);
+
+  const regions = Array.from(new Set(agencies.map(a => a.region).filter(Boolean))).sort();
+  const orgTypes = Array.from(new Set(agencies.map(a => a.orgType).filter(Boolean))).sort();
+
+  const targetOrgTypes = survey?.targetOrgTypes ?? [];
+  const hasOrgTypeRestriction = targetOrgTypes.length > 0;
+  const allowedOrgTypeSet = hasOrgTypeRestriction ? new Set(targetOrgTypes) : null;
+
+  const availableOrgTypes = hasOrgTypeRestriction
+    ? orgTypes.filter(t => allowedOrgTypeSet!.has(t))
+    : orgTypes;
+
+  useEffect(() => {
+    if (!hasOrgTypeRestriction) return;
+    if (!selectedOrgType) return;
+    if (!allowedOrgTypeSet || !allowedOrgTypeSet.has(selectedOrgType)) {
+      setSelectedOrgType('');
+      setSelectedAgency(null);
+    }
+  }, [hasOrgTypeRestriction, selectedOrgType, survey?.targetOrgTypes]);
+
+  const filteredAgencies = agencies.filter(a => {
+    const matchesAllowedType = !hasOrgTypeRestriction || (a.orgType ? allowedOrgTypeSet!.has(a.orgType) : false);
+    const matchesRegion = !selectedRegion || a.region === selectedRegion;
+    const matchesOrgType = !selectedOrgType || a.orgType === selectedOrgType;
+    const matchesSearch = !searchAgency || a.name.toLowerCase().includes(searchAgency.toLowerCase());
+    return matchesAllowedType && matchesRegion && matchesOrgType && matchesSearch;
+  });
+
+  const handleInputChange = (fieldId: string, value: any) => {
+    setAnswers(prev => ({ ...prev, [fieldId]: value }));
+  };
+
+  const handleCheckboxChange = (fieldId: string, option: string, checked: boolean) => {
+    setAnswers(prev => {
+      const currentList = (prev[fieldId] as string[]) || [];
+      if (checked) {
+        return { ...prev, [fieldId]: [...currentList, option] };
+      } else {
+        return { ...prev, [fieldId]: currentList.filter(item => item !== option) };
+      }
+    });
+  };
+
+  const handleCopyUrl = () => {
+    navigator.clipboard.writeText(window.location.href);
+    alert('링크가 클립보드에 복사되었습니다.');
+  };
+
+  async function handleSubmitQuestion(e: React.FormEvent) {
     e.preventDefault();
     if (!id || !qAuthor || !qPassword || !qQuestion) {
       alert('모든 항목을 입력해주세요.');
@@ -101,51 +164,7 @@ const SurveySubmit: React.FC = () => {
       console.error(err);
       alert('문의 등록에 실패했습니다.');
     }
-  };
-
-  useEffect(() => {
-    const loadedAgencies = organizationsData.map(org => ({
-      id: org.id,
-      name: org.orgName,
-      region: org.region,
-      regionCode: org.regionCode,
-      regionLong: org.regionLong,
-      orgCode: org.orgCode,
-      orgName: org.orgName,
-      orgType: org.orgType
-    }));
-    setAgencies(loadedAgencies);
-  }, []);
-
-  const regions = Array.from(new Set(agencies.map(a => a.region).filter(Boolean))).sort();
-  const orgTypes = Array.from(new Set(agencies.map(a => a.orgType).filter(Boolean))).sort();
-
-  const filteredAgencies = agencies.filter(a => {
-    const matchesRegion = !selectedRegion || a.region === selectedRegion;
-    const matchesOrgType = !selectedOrgType || a.orgType === selectedOrgType;
-    const matchesSearch = !searchAgency || a.name.toLowerCase().includes(searchAgency.toLowerCase());
-    return matchesRegion && matchesOrgType && matchesSearch;
-  });
-
-  const handleInputChange = (fieldId: string, value: any) => {
-    setAnswers(prev => ({ ...prev, [fieldId]: value }));
-  };
-
-  const handleCheckboxChange = (fieldId: string, option: string, checked: boolean) => {
-    setAnswers(prev => {
-      const currentList = (prev[fieldId] as string[]) || [];
-      if (checked) {
-        return { ...prev, [fieldId]: [...currentList, option] };
-      } else {
-        return { ...prev, [fieldId]: currentList.filter(item => item !== option) };
-      }
-    });
-  };
-
-  const handleCopyUrl = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert('링크가 클립보드에 복사되었습니다.');
-  };
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,6 +231,27 @@ const SurveySubmit: React.FC = () => {
     if (errMsg) {
       alert(String(errMsg));
       return;
+    }
+
+    const sub = (data as any)?.submission;
+    if (sub && sub.id && sub.survey_id) {
+      setSubmittedSubmission({
+        id: String(sub.id),
+        surveyId: String(sub.survey_id),
+        agencyId: String(sub.agency_id),
+        agencyName: String(sub.agency_name ?? selectedAgency.name ?? ''),
+        data: (sub.data ?? answers) as Record<string, any>,
+        submittedAt: sub.submitted_at ? new Date(String(sub.submitted_at)).getTime() : Date.now(),
+      });
+    } else {
+      setSubmittedSubmission({
+        id: `LOCAL-${Date.now()}`,
+        surveyId: survey.id,
+        agencyId: selectedAgency.id,
+        agencyName: selectedAgency.name,
+        data: (answers ?? {}) as Record<string, any>,
+        submittedAt: Date.now(),
+      });
     }
 
     setSubmitted(true);
@@ -308,6 +348,143 @@ const SurveySubmit: React.FC = () => {
     }
   };
 
+  const renderSubmittedValue = (field: SurveyField, value: any) => {
+    if (value === undefined || value === null || value === '') {
+      return <span className="text-gray-400">(미입력)</span>;
+    }
+
+    if (field.type === 'multiselect' && Array.isArray(value)) {
+      return <span className="text-gray-900">{value.join(', ')}</span>;
+    }
+
+    if (field.type === 'table') {
+      const rows = (Array.isArray(value) ? value : []) as TableRow[];
+      const cols = field.columns ?? [];
+
+      if (cols.length === 0) {
+        return <span className="text-gray-900">(테이블 컬럼 없음)</span>;
+      }
+
+      if (rows.length === 0) {
+        return <span className="text-gray-400">(입력된 행 없음)</span>;
+      }
+
+      return (
+        <div className="overflow-x-auto">
+          <table className="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+            <thead className="bg-gray-50">
+              <tr>
+                {cols.map(c => (
+                  <th key={c.id} className="text-left text-xs font-bold text-gray-700 px-3 py-2 border-b border-gray-200">
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, idx) => (
+                <tr key={r.id ?? idx} className="odd:bg-white even:bg-gray-50">
+                  {cols.map(c => {
+                    const cell = (r as any)?.data?.[c.id];
+                    const cellText = Array.isArray(cell) ? cell.join(', ') : (cell ?? '');
+                    return (
+                      <td key={c.id} className="text-sm text-gray-900 px-3 py-2 border-b border-gray-100 whitespace-pre-wrap">
+                        {cellText || <span className="text-gray-400">(미입력)</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (typeof value === 'string') {
+      return <span className="text-gray-900 whitespace-pre-wrap">{value}</span>;
+    }
+
+    return <span className="text-gray-900">{String(value)}</span>;
+  };
+
+  const toExcelCellString = (field: SurveyField, value: any) => {
+    if (value === undefined || value === null || value === '') return '';
+    if (field.type === 'multiselect' && Array.isArray(value)) return value.join(', ');
+    if (field.type === 'table') return '(테이블: 별도 시트 참조)';
+    if (typeof value === 'string') return value;
+    return String(value);
+  };
+
+  const sanitizeSheetName = (name: string) => {
+    const cleaned = (name ?? '').replace(/[\\/?*\[\]:]/g, ' ').trim();
+    const trimmed = cleaned.length > 31 ? cleaned.slice(0, 31) : cleaned;
+    return trimmed || 'Sheet';
+  };
+
+  const sanitizeFileName = (name: string) => {
+    const cleaned = (name ?? '').replace(/[\\/?%*:|"<>]/g, '_').trim();
+    return cleaned || 'download';
+  };
+
+  const handleDownloadExcel = () => {
+    if (!survey) return;
+    const submittedData = submittedSubmission?.data ?? (answers ?? {});
+    const submittedAgencyName = submittedSubmission?.agencyName ?? selectedAgency?.name ?? '';
+    const submittedAtText = submittedSubmission?.submittedAt
+      ? new Date(submittedSubmission.submittedAt).toLocaleString()
+      : '';
+
+    try {
+      const wb = XLSX.utils.book_new();
+
+      const summaryRows = survey.fields.map(f => ({
+        항목: f.label,
+        값: toExcelCellString(f, (submittedData as any)[f.id]),
+        필수: f.required ? 'Y' : 'N',
+      }));
+
+      const metaRows = [
+        { 항목: '조사명', 값: survey.title ?? '' },
+        { 항목: '제출기관', 값: submittedAgencyName },
+        { 항목: '제출시각', 값: submittedAtText },
+      ];
+
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(metaRows), sanitizeSheetName('메타정보'));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), sanitizeSheetName('제출내용'));
+
+      for (const field of survey.fields) {
+        if (field.type !== 'table') continue;
+
+        const cols = field.columns ?? [];
+        const rows = ((submittedData as any)[field.id] ?? []) as TableRow[];
+
+        const header = cols.map(c => c.label);
+        const aoa: any[][] = [header];
+
+        for (const r of rows) {
+          const line = cols.map(c => {
+            const cell = (r as any)?.data?.[c.id];
+            if (cell === undefined || cell === null) return '';
+            if (Array.isArray(cell)) return cell.join(', ');
+            return String(cell);
+          });
+          aoa.push(line);
+        }
+
+        const sheet = XLSX.utils.aoa_to_sheet(aoa);
+        XLSX.utils.book_append_sheet(wb, sheet, sanitizeSheetName(field.label || '테이블'));
+      }
+
+      const fileBase = sanitizeFileName(`${survey.title ?? 'survey'}_${submittedAgencyName || 'agency'}`);
+      const dateTag = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `${fileBase}_${dateTag}.xlsx`, { compression: true });
+    } catch (e) {
+      console.error(e);
+      alert('엑셀 다운로드에 실패했습니다.');
+    }
+  };
+
   if (!survey) return <div className="p-12 text-center text-gray-500">요청 정보를 찾을 수 없습니다.</div>;
 
   const timing = getSurveyTimingStatus(survey, Date.now());
@@ -319,21 +496,72 @@ const SurveySubmit: React.FC = () => {
       : `제출기간: ${formatPeriod(survey)}`;
 
   if (submitted) {
+    const submittedData = submittedSubmission?.data ?? (answers ?? {});
+    const submittedAgencyName = submittedSubmission?.agencyName ?? selectedAgency?.name ?? '';
+    const submittedAtText = submittedSubmission?.submittedAt
+      ? new Date(submittedSubmission.submittedAt).toLocaleString()
+      : '';
+
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-        <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
-          <Check className="h-8 w-8 text-green-600" />
+      <div className={`${survey?.fields.some(f => f.type === 'table') ? 'w-full px-4 sm:px-6 lg:px-8' : 'w-full px-4 sm:px-6 lg:px-8'} py-12`}>
+        <div className="text-center py-10">
+          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
+            <Check className="h-8 w-8 text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">제출이 완료되었습니다.</h2>
+          <p className="text-gray-500">
+            {submittedAgencyName}의 자료가 성공적으로 저장되었습니다.
+          </p>
+          {submittedAtText && (
+            <div className="text-xs text-gray-400 mt-2">제출 시각: {submittedAtText}</div>
+          )}
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">제출이 완료되었습니다.</h2>
-        <p className="text-gray-500 mb-8">
-          {selectedAgency?.name}의 자료가 성공적으로 저장되었습니다.
-        </p>
-        <button
-          onClick={() => navigate('/surveys')}
-          className="px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200"
-        >
-          목록으로 돌아가기
-        </button>
+
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-lg font-bold text-gray-900">제출 내용 확인</h3>
+            <button
+              type="button"
+              onClick={handleDownloadExcel}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-bold hover:bg-emerald-100 border border-emerald-200 transition-colors"
+              title="엑셀 다운로드"
+            >
+              <Download size={16} /> 엑셀 다운로드
+            </button>
+          </div>
+          <div className="space-y-4">
+            {survey.fields.map(field => (
+              <div key={field.id} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                <div className="text-sm font-bold text-gray-800 mb-1.5">
+                  {field.label} {field.required && <span className="text-red-500">*</span>}
+                </div>
+                {field.description && (
+                  <div className="text-xs text-gray-500 mb-2 whitespace-pre-wrap">{field.description}</div>
+                )}
+                <div className="text-sm">
+                  {renderSubmittedValue(field, (submittedData as any)[field.id])}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-center gap-3 mt-8">
+            <button
+              onClick={() => navigate('/surveys')}
+              className="px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200"
+            >
+              목록으로 돌아가기
+            </button>
+            <button
+              onClick={() => {
+                setSubmitted(false);
+              }}
+              className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700"
+            >
+              다시 작성하기
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -403,7 +631,7 @@ const SurveySubmit: React.FC = () => {
                       className="w-full p-3 bg-white border border-gray-300 rounded-lg appearance-none focus:ring-2 focus:ring-indigo-500 outline-none"
                     >
                       <option value="">전체</option>
-                      {orgTypes.map(type => (
+                      {availableOrgTypes.map(type => (
                         <option key={type} value={type}>{type}</option>
                       ))}
                     </select>

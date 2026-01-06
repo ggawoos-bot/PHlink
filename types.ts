@@ -60,6 +60,7 @@ export interface Survey {
   fields: SurveyField[];
   status: 'OPEN' | 'CLOSED';
   createdAt: number;
+  targetOrgTypes?: string[];
 }
 
 export interface SurveySubmission {
