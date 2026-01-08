@@ -13,6 +13,41 @@ type OrgRow = {
   orgType?: string;
 };
 
+const REGION_ORDER = [
+  '서울',
+  '부산',
+  '대구',
+  '인천',
+  '광주',
+  '대전',
+  '울산',
+  '세종',
+  '경기',
+  '강원',
+  '충북',
+  '충남',
+  '전북',
+  '전남',
+  '경북',
+  '경남',
+  '제주',
+];
+
+const ORG_TYPE_ORDER = [
+  '시도청',
+  '보건소',
+  '보건지소',
+  '보건진료소',
+  '금연지원센터',
+];
+
+const orderIndex = (list: string[], v: string) => {
+  const idx = list.indexOf(v);
+  return idx === -1 ? 9999 : idx;
+};
+
+const compareKorean = (a: string, b: string) => a.localeCompare(b, 'ko');
+
 const normalizeOrgRow = (row: any): OrgRow => {
   return {
     id: String(row?.id ?? ''),
@@ -91,11 +126,21 @@ const AdminOrganizations: React.FC = () => {
   }, [items]);
 
   const regions = useMemo(() => {
-    return Array.from(new Set(items.map(i => i.region).filter(Boolean))).sort();
+    return Array.from(new Set(items.map(i => i.region).filter(Boolean))).sort((a, b) => {
+      const ia = orderIndex(REGION_ORDER, a);
+      const ib = orderIndex(REGION_ORDER, b);
+      if (ia !== ib) return ia - ib;
+      return compareKorean(a, b);
+    });
   }, [items]);
 
   const orgTypes = useMemo(() => {
-    return Array.from(new Set(items.map(i => i.orgType).filter(Boolean) as string[])).sort();
+    return Array.from(new Set(items.map(i => i.orgType).filter(Boolean) as string[])).sort((a, b) => {
+      const ia = orderIndex(ORG_TYPE_ORDER, a);
+      const ib = orderIndex(ORG_TYPE_ORDER, b);
+      if (ia !== ib) return ia - ib;
+      return compareKorean(a, b);
+    });
   }, [items]);
 
   const computedDraftId = useMemo(() => {

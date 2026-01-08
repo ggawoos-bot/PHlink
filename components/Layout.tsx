@@ -81,7 +81,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <div className="min-h-screen bg-slate-50/40 flex flex-col font-sans text-slate-900">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-indigo-700 via-indigo-600 to-sky-600 border-b border-white/10 backdrop-blur supports-[backdrop-filter]:bg-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center gap-0.5 hover:opacity-90 transition-opacity select-none">
               <span className="text-2xl font-black tracking-tighter text-white">
@@ -97,6 +97,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* Desktop Nav */}
               <nav className="hidden md:flex items-center gap-2">
                 <Link to="/" className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${isActive('/')}`}>자료 제출</Link>
+                <Link to="/submissions" className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${isActive('/submissions')}`}>제출자료 조회</Link>
                 <Link to="/admin" className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 ${isActive('/admin')}`}>
                   <LayoutDashboard size={16}/> 관리자 모드
                 </Link>
@@ -148,6 +149,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="md:hidden bg-white/10 border-t border-white/10 backdrop-blur">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               <Link to="/" className="block px-3 py-2 rounded-md text-base font-semibold text-white/90 hover:text-white hover:bg-white/10">자료 제출</Link>
+              <Link to="/submissions" className="block px-3 py-2 rounded-md text-base font-semibold text-white/90 hover:text-white hover:bg-white/10">제출자료 조회</Link>
               <Link to="/admin" className="block px-3 py-2 rounded-md text-base font-semibold text-white/90 hover:text-white hover:bg-white/10">관리자 대시보드</Link>
             </div>
           </div>

@@ -5,6 +5,7 @@ import Admin from './pages/Admin';
 import SurveyCreate from './pages/SurveyCreate';
 import SurveyList from './pages/SurveyList';
 import SurveySubmit from './pages/SurveySubmit';
+import SubmissionLookup from './pages/SubmissionLookup';
 import AdminLogin from './pages/AdminLogin';
 import Statistics from './pages/Statistics';
 import AdminOrganizations from './pages/AdminOrganizations';
@@ -65,6 +66,7 @@ const App: React.FC = () => {
           <Route path="/admin/survey/edit/:id" element={<RequireAdmin><SurveyCreate /></RequireAdmin>} />
           <Route path="/surveys" element={<SurveyList />} />
           <Route path="/surveys/submit/:id" element={<SurveySubmit />} />
+          <Route path="/submissions" element={<SubmissionLookup />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

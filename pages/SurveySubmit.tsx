@@ -10,6 +10,41 @@ import * as XLSX from 'xlsx';
 
 type SurveyTimingStatus = 'UPCOMING' | 'OPEN' | 'CLOSED';
 
+const REGION_ORDER = [
+  '서울',
+  '부산',
+  '대구',
+  '인천',
+  '광주',
+  '대전',
+  '울산',
+  '세종',
+  '경기',
+  '강원',
+  '충북',
+  '충남',
+  '전북',
+  '전남',
+  '경북',
+  '경남',
+  '제주',
+];
+
+const ORG_TYPE_ORDER = [
+  '시도청',
+  '보건소',
+  '보건지소',
+  '보건진료소',
+  '금연지원센터',
+];
+
+const orderIndex = (list: string[], v: string) => {
+  const idx = list.indexOf(v);
+  return idx === -1 ? 9999 : idx;
+};
+
+const compareKorean = (a: string, b: string) => a.localeCompare(b, 'ko');
+
 const getSurveyTimingStatus = (survey: Survey, nowMs: number): SurveyTimingStatus => {
   if (survey.status === 'CLOSED') return 'CLOSED';
   const startMs = new Date(survey.startAt).getTime();
@@ -48,6 +83,7 @@ const SurveySubmit: React.FC = () => {
   const [searchAgency, setSearchAgency] = useState('');
   const [selectedAgency, setSelectedAgency] = useState<Agency | null>(null);
   const [answers, setAnswers] = useState<Record<string, any>>({}); // any to support array for checkboxes
+  const [systemUserId, setSystemUserId] = useState<string>('');
 
   useEffect(() => {
     if (!id) return;
@@ -92,8 +128,19 @@ const SurveySubmit: React.FC = () => {
     setAgencies(loadedAgencies);
   }, []);
 
-  const regions = Array.from(new Set(agencies.map(a => a.region).filter(Boolean))).sort();
-  const orgTypes = Array.from(new Set(agencies.map(a => a.orgType).filter(Boolean))).sort();
+  const regions = Array.from(new Set(agencies.map(a => a.region).filter(Boolean))).sort((a, b) => {
+    const ia = orderIndex(REGION_ORDER, a);
+    const ib = orderIndex(REGION_ORDER, b);
+    if (ia !== ib) return ia - ib;
+    return compareKorean(a, b);
+  });
+
+  const orgTypes = Array.from(new Set(agencies.map(a => a.orgType).filter(Boolean))).sort((a, b) => {
+    const ia = orderIndex(ORG_TYPE_ORDER, a);
+    const ib = orderIndex(ORG_TYPE_ORDER, b);
+    if (ia !== ib) return ia - ib;
+    return compareKorean(a, b);
+  });
 
   const targetOrgTypes = survey?.targetOrgTypes ?? [];
   const hasOrgTypeRestriction = targetOrgTypes.length > 0;
@@ -118,6 +165,16 @@ const SurveySubmit: React.FC = () => {
     const matchesOrgType = !selectedOrgType || a.orgType === selectedOrgType;
     const matchesSearch = !searchAgency || a.name.toLowerCase().includes(searchAgency.toLowerCase());
     return matchesAllowedType && matchesRegion && matchesOrgType && matchesSearch;
+  }).sort((a, b) => {
+    const ra = orderIndex(REGION_ORDER, String(a.region ?? ''));
+    const rb = orderIndex(REGION_ORDER, String(b.region ?? ''));
+    if (ra !== rb) return ra - rb;
+
+    const ta = orderIndex(ORG_TYPE_ORDER, String(a.orgType ?? ''));
+    const tb = orderIndex(ORG_TYPE_ORDER, String(b.orgType ?? ''));
+    if (ta !== tb) return ta - tb;
+
+    return compareKorean(String(a.name ?? ''), String(b.name ?? ''));
   });
 
   const handleInputChange = (fieldId: string, value: any) => {
@@ -178,6 +235,11 @@ const SurveySubmit: React.FC = () => {
       return;
     }
 
+    if (!String(systemUserId ?? '').trim()) {
+      alert(`'시스템 사용자아이디' 항목을 입력/선택해주세요.`);
+      return;
+    }
+
     const nowMs = Date.now();
     const timing = getSurveyTimingStatus(survey, nowMs);
     if (timing === 'UPCOMING') {
@@ -221,12 +283,17 @@ const SurveySubmit: React.FC = () => {
 
     setLoading(true);
 
+    const answersWithMeta = {
+      ...answers,
+      __system_user_id: systemUserId.trim(),
+    };
+
     const { data, error } = await supabase.functions.invoke('phlink-submit-survey', {
       body: {
         surveyId: survey.id,
         agencyId: selectedAgency.id,
         agencyName: selectedAgency.name,
-        answers,
+        answers: answersWithMeta,
       },
     });
 
@@ -245,7 +312,7 @@ const SurveySubmit: React.FC = () => {
         surveyId: String(sub.survey_id),
         agencyId: String(sub.agency_id),
         agencyName: String(sub.agency_name ?? selectedAgency.name ?? ''),
-        data: (sub.data ?? answers) as Record<string, any>,
+        data: (sub.data ?? answersWithMeta) as Record<string, any>,
         submittedAt: sub.submitted_at ? new Date(String(sub.submitted_at)).getTime() : Date.now(),
       });
     } else {
@@ -254,7 +321,7 @@ const SurveySubmit: React.FC = () => {
         surveyId: survey.id,
         agencyId: selectedAgency.id,
         agencyName: selectedAgency.name,
-        data: (answers ?? {}) as Record<string, any>,
+        data: (answersWithMeta ?? {}) as Record<string, any>,
         submittedAt: Date.now(),
       });
     }
@@ -563,7 +630,7 @@ const SurveySubmit: React.FC = () => {
               }}
               className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700"
             >
-              다시 작성하기
+              수정하기
             </button>
           </div>
         </div>
@@ -591,14 +658,24 @@ const SurveySubmit: React.FC = () => {
             <Share2 size={24} />
           </button>
         </div>
-        <p className="text-gray-600 bg-gray-50 p-4 rounded-lg text-sm border border-gray-100 mt-2 whitespace-pre-wrap">
-          {survey.description}
-        </p>
+        {!!(survey.description ?? '').trim() && (
+          <div className="mt-3 p-4 rounded-lg border border-blue-200 bg-blue-50 text-blue-900">
+            <div className="space-y-2 text-base leading-relaxed">
+              {(survey.description ?? '')
+                .split(/\n\s*\n/g)
+                .map(s => s.trim())
+                .filter(Boolean)
+                .map((p, idx) => (
+                  <p key={idx}>{p}</p>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className={`mb-6 p-4 rounded-lg border flex items-start gap-2 ${isWindowOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : 'bg-gray-50 border-gray-200 text-gray-700'}`}>
         <AlertCircle size={18} className="mt-0.5" />
-        <div className="text-sm font-medium">{timingMessage}</div>
+        <div className="text-base font-medium">{timingMessage}</div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -708,16 +785,34 @@ const SurveySubmit: React.FC = () => {
                     </div>
                 ))}
             </div>
-         </div>
 
-         <div className="flex justify-end">
-             <button 
-                type="submit" 
-                disabled={loading || !isWindowOpen}
-                className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
-             >
-                {loading ? '제출 중...' : !isWindowOpen ? (timing === 'UPCOMING' ? '예정' : '제출 마감') : '자료 제출하기'}
-             </button>
+            <div className="mt-6">
+              <div className="flex flex-nowrap justify-end items-end gap-4">
+                <div className="flex items-end gap-3 w-full max-w-xl min-w-0">
+                  <div className="text-xl font-bold text-gray-700 whitespace-nowrap pb-1">
+                    시스템 사용자아이디
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="예: user123"
+                    className="flex-1 min-w-0 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    value={systemUserId}
+                    onChange={(e) => setSystemUserId(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={loading || !isWindowOpen}
+                  className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed whitespace-nowrap shrink-0"
+                >
+                  {loading ? '제출 중...' : !isWindowOpen ? (timing === 'UPCOMING' ? '예정' : '제출 마감') : '자료 제출하기'}
+                </button>
+              </div>
+              <div className="text-xs text-gray-800 mt-1 w-full text-right">
+                ※ 제출자의 금연서비스 통합정보시스템 아이디를 입력하시기 바랍니다. 제출한 자료를 조회/수정할 때 이용됩니다.
+              </div>
+            </div>
          </div>
       </form>
 

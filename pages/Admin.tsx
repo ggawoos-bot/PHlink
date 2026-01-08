@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3, Building2 } from 'lucide-react';
-import { answerSurveyQnA, clearSurveyQnAAnswer, deleteSurveyById, deleteSurveyQnAById, listSurveyQnAs, listSurveySubmissions, listSurveys } from '../services/surveys';
+import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3, Building2, Search } from 'lucide-react';
+import { answerSurveyQnA, clearSurveyQnAAnswer, countSurveySubmissionsBySurveyId, deleteSurveyById, deleteSurveyQnAById, deleteSurveySubmissionById, listSurveyQnAs, listSurveySubmissions, listSurveySubmissionsPaged, listSurveys, updateSurveySubmissionById } from '../services/surveys';
 import * as XLSX from 'xlsx';
-import { Survey, SurveyQnAPost, SurveySubmission, TableRow } from '../types';
+import { Survey, SurveyField, SurveyQnAPost, SurveySubmission, TableRow } from '../types';
 import { supabase } from '../services/supabaseClient';
 import organizationsData from '../org/organizations.generated.json';
+import TableEditor from '../components/TableEditor';
 
 const getSurveyPeriodLabel = (s: any) => {
   const start = s?.startAt ? String(s.startAt).replace('T', ' ') : '';
@@ -20,6 +21,17 @@ const Admin: React.FC = () => {
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [selectedSurveyId, setSelectedSurveyId] = useState<string>('');
   const [submissions, setSubmissions] = useState<SurveySubmission[]>([]);
+  const [submissionsTotal, setSubmissionsTotal] = useState<number>(0);
+  const [submissionsLoading, setSubmissionsLoading] = useState<boolean>(false);
+  const [submissionsPage, setSubmissionsPage] = useState<number>(1);
+  const [submissionsPageSize, setSubmissionsPageSize] = useState<number>(50);
+  const [submissionsSearch, setSubmissionsSearch] = useState<string>('');
+  const [selectedRegion, setSelectedRegion] = useState<string>('');
+  const [selectedOrgType, setSelectedOrgType] = useState<string>('');
+
+  const [editingSubmission, setEditingSubmission] = useState<SurveySubmission | null>(null);
+  const [editingAnswers, setEditingAnswers] = useState<Record<string, any>>({});
+  const [editingSaving, setEditingSaving] = useState<boolean>(false);
   const [surveyQnAs, setSurveyQnAs] = useState<SurveyQnAPost[]>([]);
   const [surveyReplyText, setSurveyReplyText] = useState<Record<string, string>>({});
   const [showShareModal, setShowShareModal] = useState(false);
@@ -49,6 +61,43 @@ const Admin: React.FC = () => {
   const currentSurvey = surveys.find(s => s.id === selectedSurveyId);
   const qnaEnabled = currentSurvey?.qnaEnabled ?? true;
 
+  const orgRows = useMemo(() => {
+    return (organizationsData ?? []).map((o: any) => ({
+      id: String(o.id),
+      region: String(o.region ?? ''),
+      orgType: String(o.orgType ?? ''),
+    }));
+  }, []);
+
+  const regions = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of orgRows) {
+      if (o.region) set.add(o.region);
+    }
+    return Array.from(set).sort();
+  }, [orgRows]);
+
+  const orgTypes = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of orgRows) {
+      if (o.orgType) set.add(o.orgType);
+    }
+    return Array.from(set).sort();
+  }, [orgRows]);
+
+  const filteredAgencyIds = useMemo(() => {
+    const region = selectedRegion.trim();
+    const orgType = selectedOrgType.trim();
+    if (!region && !orgType) return undefined;
+    const ids: string[] = [];
+    for (const o of orgRows) {
+      if (region && o.region !== region) continue;
+      if (orgType && o.orgType !== orgType) continue;
+      ids.push(o.id);
+    }
+    return ids;
+  }, [orgRows, selectedOrgType, selectedRegion]);
+
   useEffect(() => {
     if (selectedSurveyId) {
       loadSurveySubmissionsAndQnAs(selectedSurveyId, qnaEnabled);
@@ -57,16 +106,183 @@ const Admin: React.FC = () => {
 
   const loadSurveySubmissionsAndQnAs = async (surveyId: string, qnaEnabled: boolean) => {
     try {
-      const [subs, qnas] = await Promise.all([
-        listSurveySubmissions(surveyId),
+      setSubmissionsLoading(true);
+      const [subsPaged, qnas] = await Promise.all([
+        listSurveySubmissionsPaged({
+          surveyId,
+          page: 1,
+          pageSize: submissionsPageSize,
+          search: submissionsSearch,
+          agencyIds: filteredAgencyIds,
+          orderBy: 'submitted_at',
+          orderDir: 'desc',
+        }),
         qnaEnabled ? listSurveyQnAs(surveyId) : Promise.resolve([] as any),
       ]);
-      setSubmissions(subs);
+      setSubmissions(subsPaged.rows);
+      setSubmissionsTotal(subsPaged.total);
+      setSubmissionsPage(1);
       setSurveyQnAs(qnas);
     } catch (e) {
       console.error(e);
       setSubmissions([]);
+      setSubmissionsTotal(0);
       setSurveyQnAs([]);
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  };
+
+  const reloadSubmissions = async (pageOverride?: number) => {
+    if (!selectedSurveyId) return;
+    const page = pageOverride ?? submissionsPage;
+    setSubmissionsLoading(true);
+    try {
+      const res = await listSurveySubmissionsPaged({
+        surveyId: selectedSurveyId,
+        page,
+        pageSize: submissionsPageSize,
+        search: submissionsSearch,
+        agencyIds: filteredAgencyIds,
+        orderBy: 'submitted_at',
+        orderDir: 'desc',
+      });
+      setSubmissions(res.rows);
+      setSubmissionsTotal(res.total);
+      setSubmissionsPage(page);
+    } catch (e) {
+      console.error(e);
+      setSubmissions([]);
+      setSubmissionsTotal(0);
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  };
+
+  const handleStartEditSubmission = (sub: SurveySubmission) => {
+    setEditingSubmission(sub);
+    setEditingAnswers({ ...(sub.data ?? {}) });
+  };
+
+  const handleSaveEditSubmission = async () => {
+    if (!editingSubmission) return;
+    setEditingSaving(true);
+    try {
+      await updateSurveySubmissionById({ id: editingSubmission.id, data: editingAnswers });
+      alert('제출 데이터가 저장되었습니다.');
+      setEditingSubmission(null);
+      await reloadSubmissions();
+    } catch (e) {
+      console.error(e);
+      alert('저장에 실패했습니다. 관리자 권한/로그인을 확인해주세요.');
+    } finally {
+      setEditingSaving(false);
+    }
+  };
+
+  const handleDeleteSubmission = (sub: SurveySubmission) => {
+    const ok = window.confirm(`'${sub.agencyName}' 제출 데이터를 삭제할까요?`);
+    if (!ok) return;
+    (async () => {
+      try {
+        await deleteSurveySubmissionById(sub.id);
+        alert('삭제되었습니다.');
+        await reloadSubmissions(1);
+      } catch (e) {
+        console.error(e);
+        alert('삭제에 실패했습니다. 관리자 권한/로그인을 확인해주세요.');
+      }
+    })();
+  };
+
+  const renderEditField = (field: SurveyField) => {
+    const value = editingAnswers[field.id];
+    switch (field.type) {
+      case 'textarea':
+        return (
+          <textarea
+            rows={4}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+            value={value || ''}
+            onChange={(e) => setEditingAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+          />
+        );
+      case 'select':
+        return (
+          <select
+            className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+            value={value || ''}
+            onChange={(e) => setEditingAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+          >
+            <option value="">선택해주세요</option>
+            {field.options?.map((opt, idx) => (
+              <option key={idx} value={opt}>{opt}</option>
+            ))}
+          </select>
+        );
+      case 'multiselect': {
+        const currentList = (Array.isArray(value) ? value : []) as string[];
+        return (
+          <div className="space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            {field.options?.map((opt, idx) => {
+              const checked = currentList.includes(opt);
+              return (
+                <label key={idx} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1.5 rounded transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? Array.from(new Set([...currentList, opt]))
+                        : currentList.filter(v => v !== opt);
+                      setEditingAnswers(prev => ({ ...prev, [field.id]: next }));
+                    }}
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-gray-700">{opt}</span>
+                </label>
+              );
+            })}
+          </div>
+        );
+      }
+      case 'date':
+        return (
+          <input
+            type="date"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+            value={value || ''}
+            onChange={(e) => setEditingAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+          />
+        );
+      case 'number':
+        return (
+          <input
+            type="number"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+            value={value || ''}
+            onChange={(e) => setEditingAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+          />
+        );
+      case 'table':
+        return (
+          <TableEditor
+            columns={field.columns || []}
+            value={((value ?? []) as TableRow[]) || []}
+            onChange={(rows) => setEditingAnswers(prev => ({ ...prev, [field.id]: rows }))}
+            minRows={field.minRows || 1}
+            maxRows={field.maxRows || 100}
+          />
+        );
+      default:
+        return (
+          <input
+            type="text"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+            value={value || ''}
+            onChange={(e) => setEditingAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+          />
+        );
     }
   };
 
@@ -74,63 +290,72 @@ const Admin: React.FC = () => {
     if (!currentSurvey) return;
     
     const workbook = XLSX.utils.book_new();
-    
-    // Sheet 1: Summary data (non-table fields)
-    const nonTableFields = currentSurvey.fields.filter(f => f.type !== 'table');
-    const summaryHeaders = ['기관명', ...nonTableFields.map(f => f.label), '제출일시'];
-    const summaryRows = submissions.map(sub => {
-      const fieldValues = nonTableFields.map(f => {
-        const val = sub.data[f.id];
-        if (Array.isArray(val)) return val.join(', ');
-        return val || '';
-      });
-      return [
-        sub.agencyName,
-        ...fieldValues,
-        new Date(sub.submittedAt).toLocaleString('ko-KR')
-      ];
-    });
-    
-    const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, '요약');
-    
-    // Sheet 2+: Table fields (one sheet per table field)
-    const tableFields = currentSurvey.fields.filter(f => f.type === 'table');
-    tableFields.forEach(field => {
-      const tableRows: any[][] = [];
-      
-      // Headers: 시도, 기관유형, 기관명, ...table columns
-      const tableHeaders = ['시도', '기관유형', '기관명', ...(field.columns?.map(col => col.label) || [])];
-      tableRows.push(tableHeaders);
-      
-      // Data rows
-      submissions.forEach(sub => {
-        const org = organizationsData.find(o => o.orgName === sub.agencyName);
-        const region = org?.region || '';
-        const orgType = org?.orgType || '';
-        
-        const tableData = sub.data[field.id] as TableRow[] | undefined;
-        if (tableData && Array.isArray(tableData)) {
-          tableData.forEach(row => {
-            const rowData = [
-              region,
-              orgType,
-              sub.agencyName,
-              ...(field.columns?.map(col => row.data?.[col.id] || '') || [])
-            ];
-            tableRows.push(rowData);
+
+    (async () => {
+      try {
+        const allSubs = await listSurveySubmissions(currentSurvey.id);
+
+        // Sheet 1: Summary data (non-table fields)
+        const nonTableFields = currentSurvey.fields.filter(f => f.type !== 'table');
+        const summaryHeaders = ['기관명', ...nonTableFields.map(f => f.label), '제출일시'];
+        const summaryRows = allSubs.map(sub => {
+          const fieldValues = nonTableFields.map(f => {
+            const val = sub.data[f.id];
+            if (Array.isArray(val)) return val.join(', ');
+            return val || '';
           });
-        }
-      });
-      
-      const tableSheet = XLSX.utils.aoa_to_sheet(tableRows);
-      // Sheet name limited to 31 characters
-      const sheetName = field.label.substring(0, 31);
-      XLSX.utils.book_append_sheet(workbook, tableSheet, sheetName);
-    });
-    
-    // Download the workbook
-    XLSX.writeFile(workbook, `취합자료_${currentSurvey.title}.xlsx`);
+          return [
+            sub.agencyName,
+            ...fieldValues,
+            new Date(sub.submittedAt).toLocaleString('ko-KR')
+          ];
+        });
+
+        const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+        XLSX.utils.book_append_sheet(workbook, summarySheet, '요약');
+
+        // Sheet 2+: Table fields (one sheet per table field)
+        const tableFields = currentSurvey.fields.filter(f => f.type === 'table');
+        tableFields.forEach(field => {
+          const tableRows: any[][] = [];
+
+          // Headers: 시도, 기관유형, 기관명, ...table columns
+          const tableHeaders = ['시도', '기관유형', '기관명', ...(field.columns?.map(col => col.label) || [])];
+          tableRows.push(tableHeaders);
+
+          // Data rows
+          allSubs.forEach(sub => {
+            const org = organizationsData.find((o: any) => o.orgName === sub.agencyName);
+            const region = org?.region || '';
+            const orgType = org?.orgType || '';
+
+            const tableData = sub.data[field.id] as TableRow[] | undefined;
+            if (tableData && Array.isArray(tableData)) {
+              tableData.forEach(row => {
+                const rowData = [
+                  region,
+                  orgType,
+                  sub.agencyName,
+                  ...(field.columns?.map(col => row.data?.[col.id] || '') || [])
+                ];
+                tableRows.push(rowData);
+              });
+            }
+          });
+
+          const tableSheet = XLSX.utils.aoa_to_sheet(tableRows);
+          // Sheet name limited to 31 characters
+          const sheetName = field.label.substring(0, 31);
+          XLSX.utils.book_append_sheet(workbook, tableSheet, sheetName);
+        });
+
+        // Download the workbook
+        XLSX.writeFile(workbook, `취합자료_${currentSurvey.title}.xlsx`);
+      } catch (e) {
+        console.error(e);
+        alert('엑셀 다운로드에 실패했습니다.');
+      }
+    })();
   };
 
   const handleSurveyEdit = () => {
@@ -140,10 +365,17 @@ const Admin: React.FC = () => {
 
   const handleSurveyDelete = () => {
     if (!selectedSurveyId || !currentSurvey) return;
-    const ok = window.confirm(`'${currentSurvey.title}' 자료 취합 요청을 삭제할까요?\n삭제 시 제출 데이터도 함께 삭제됩니다.`);
-    if (!ok) return;
     (async () => {
       try {
+        const submissionCount = await countSurveySubmissionsBySurveyId(selectedSurveyId);
+        if (submissionCount > 0) {
+          alert(`제출된 자료가 ${submissionCount}건 있어 삭제할 수 없습니다.\n제출자료를 먼저 정리(삭제)한 후 다시 시도해주세요.`);
+          return;
+        }
+
+        const ok = window.confirm(`'${currentSurvey.title}' 자료 취합 요청을 삭제할까요?`);
+        if (!ok) return;
+
         await deleteSurveyById(selectedSurveyId);
         await loadSurveys();
         alert('자료 취합 요청이 삭제되었습니다.');
@@ -334,7 +566,7 @@ const Admin: React.FC = () => {
                   )}
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-indigo-600">{submissions.length}</div>
+                  <div className="text-2xl font-bold text-indigo-600">{submissionsTotal}</div>
                   <div className="text-xs text-gray-500">제출 완료 기관</div>
                 </div>
               </div>
@@ -351,6 +583,77 @@ const Admin: React.FC = () => {
                     <Download size={14} /> 엑셀 다운로드
                   </button>
                 </div>
+                <div className="p-4 border-b border-gray-100 bg-white">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    <div className="md:col-span-5">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">기관명 검색</label>
+                      <div className="relative">
+                        <Search size={16} className="absolute left-3 top-3 text-gray-400" />
+                        <input
+                          type="text"
+                          className="w-full pl-9 p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+                          value={submissionsSearch}
+                          onChange={(e) => setSubmissionsSearch(e.target.value)}
+                          placeholder="기관명을 입력하세요"
+                        />
+                      </div>
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">시도</label>
+                      <select
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+                        value={selectedRegion}
+                        onChange={(e) => setSelectedRegion(e.target.value)}
+                      >
+                        <option value="">전체</option>
+                        {regions.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">기관 유형</label>
+                      <select
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+                        value={selectedOrgType}
+                        onChange={(e) => setSelectedOrgType(e.target.value)}
+                      >
+                        <option value="">전체</option>
+                        {orgTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">표시 개수</label>
+                      <select
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+                        value={String(submissionsPageSize)}
+                        onChange={(e) => setSubmissionsPageSize(Number(e.target.value))}
+                      >
+                        {[25, 50, 100, 200].map(n => <option key={n} value={String(n)}>{n}개</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center mt-3">
+                    <div className="text-xs text-gray-500">총 {submissionsTotal}건</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                        disabled={submissionsLoading || submissionsPage <= 1}
+                        onClick={() => reloadSubmissions(submissionsPage - 1)}
+                      >
+                        이전
+                      </button>
+                      <div className="text-sm text-gray-600">{submissionsPage}</div>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                        disabled={submissionsLoading || (submissionsPage * submissionsPageSize) >= submissionsTotal}
+                        onClick={() => reloadSubmissions(submissionsPage + 1)}
+                      >
+                        다음
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
                     <thead className="bg-gray-50">
@@ -361,12 +664,19 @@ const Admin: React.FC = () => {
                             {field.label}
                           </th>
                         ))}
+                        <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">관리</th>
                         <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">제출일시</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {submissions.length === 0 ? (
-                        <tr><td colSpan={(currentSurvey?.fields.length || 0) + 2} className="text-center py-8 text-gray-500">제출된 내역이 없습니다.</td></tr>
+                      {submissionsLoading ? (
+                        <tr>
+                          <td colSpan={(currentSurvey?.fields.length || 0) + 3} className="text-center py-8 text-gray-500">불러오는 중...</td>
+                        </tr>
+                      ) : submissions.length === 0 ? (
+                        <tr>
+                          <td colSpan={(currentSurvey?.fields.length || 0) + 3} className="text-center py-8 text-gray-500">제출된 내역이 없습니다.</td>
+                        </tr>
                       ) : (
                         submissions.map((sub) => (
                           <tr key={sub.id} className="hover:bg-gray-50">
@@ -400,6 +710,24 @@ const Admin: React.FC = () => {
                                 </td>
                               );
                             })}
+                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditSubmission(sub)}
+                                  className="px-2 py-1 text-xs font-bold rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSubmission(sub)}
+                                  className="px-2 py-1 text-xs font-bold rounded border border-red-200 text-red-600 hover:bg-red-50"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-gray-400 text-xs">
                               {new Date(sub.submittedAt).toLocaleString('ko-KR')}
                             </td>
@@ -552,6 +880,59 @@ const Admin: React.FC = () => {
                   );
                 })}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submission Edit Modal */}
+      {editingSubmission && currentSurvey && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-none max-h-[90vh] overflow-hidden transform transition-all scale-100">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                <Pencil size={20} className="text-indigo-600" /> {editingSubmission.agencyName} - 제출 데이터 수정
+              </h3>
+              <button
+                onClick={() => setEditingSubmission(null)}
+                className="px-3 py-1.5 text-sm font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                disabled={editingSaving}
+              >
+                닫기
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-130px)]">
+              <div className="space-y-6">
+                {currentSurvey.fields.map(field => (
+                  <div key={field.id} className="border-b border-gray-100 pb-4 last:border-0">
+                    <div className="text-sm font-bold text-gray-800 mb-1.5">
+                      {field.label} {field.required && <span className="text-red-500">*</span>}
+                    </div>
+                    {field.description && (
+                      <div className="text-xs text-gray-500 mb-2 whitespace-pre-wrap">{field.description}</div>
+                    )}
+                    {renderEditField(field)}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-white flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingSubmission(null)}
+                className="px-4 py-2 bg-white text-gray-700 rounded border border-gray-300 hover:bg-gray-50"
+                disabled={editingSaving}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditSubmission}
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                disabled={editingSaving}
+              >
+                {editingSaving ? '저장 중...' : '저장 및 제출'}
+              </button>
             </div>
           </div>
         </div>

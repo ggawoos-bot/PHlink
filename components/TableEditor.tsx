@@ -22,11 +22,61 @@ const TableEditor: React.FC<TableEditorProps> = ({
   const [rows, setRows] = useState<TableRow[]>(value);
   const [selectedCell, setSelectedCell] = useState<{ rowId: string; colId: string } | null>(null);
   const [copiedData, setCopiedData] = useState<string>('');
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const tableRef = useRef<HTMLDivElement>(null);
+  const resizeStateRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
     setRows(value);
   }, [value]);
+
+  useEffect(() => {
+    setColWidths((prev) => {
+      const next: Record<string, number> = { ...prev };
+      for (const col of columns) {
+        const incoming = typeof col.width === 'number' ? col.width : undefined;
+        if (next[col.id] == null) {
+          next[col.id] = incoming ?? 150;
+        } else if (incoming != null && next[col.id] !== incoming) {
+          // If schema-provided width changes, respect it
+          next[col.id] = incoming;
+        }
+      }
+
+      // Remove widths for removed columns
+      for (const key of Object.keys(next)) {
+        if (!columns.some((c) => c.id === key)) {
+          delete next[key];
+        }
+      }
+
+      return next;
+    });
+  }, [columns]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const st = resizeStateRef.current;
+      if (!st) return;
+      e.preventDefault();
+
+      const delta = e.clientX - st.startX;
+      const nextWidth = Math.max(80, Math.min(800, st.startWidth + delta));
+      setColWidths((prev) => ({ ...prev, [st.colId]: nextWidth }));
+    };
+
+    const onUp = () => {
+      if (!resizeStateRef.current) return;
+      resizeStateRef.current = null;
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
 
   useEffect(() => {
     if (rows.length === 0 && minRows > 0) {
@@ -288,11 +338,28 @@ const TableEditor: React.FC<TableEditorProps> = ({
               {columns.map(col => (
                 <th
                   key={col.id}
-                  className="px-4 py-3 text-left text-xs font-bold text-gray-700 border-b-2 border-r border-gray-300 last:border-r-0 bg-gray-50"
-                  style={{ width: col.width || 'auto', minWidth: col.width || 150 }}
+                  className="px-4 py-3 pr-6 relative text-left text-xs font-bold text-gray-700 border-b-2 border-r border-gray-300 last:border-r-0 bg-gray-50"
+                  style={{ width: colWidths[col.id] ?? 150, minWidth: colWidths[col.id] ?? 150 }}
                 >
                   {col.label}
                   {col.required && <span className="text-red-500 ml-1">*</span>}
+                  {!readOnly && (
+                    <div
+                      role="separator"
+                      aria-orientation="vertical"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        resizeStateRef.current = {
+                          colId: col.id,
+                          startX: e.clientX,
+                          startWidth: colWidths[col.id] ?? 150,
+                        };
+                      }}
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                      title="드래그하여 너비 조절"
+                    />
+                  )}
                 </th>
               ))}
               {!readOnly && (
@@ -319,6 +386,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
                     <td
                       key={col.id}
                       className="border-b border-r border-gray-200 last:border-r-0 p-0"
+                      style={{ width: colWidths[col.id] ?? 150, minWidth: colWidths[col.id] ?? 150 }}
                     >
                       {renderCell(row, col)}
                     </td>
