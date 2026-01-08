@@ -104,6 +104,18 @@ const Admin: React.FC = () => {
     }
   }, [selectedSurveyId, qnaEnabled]);
 
+  useEffect(() => {
+    if (!selectedSurveyId) return;
+
+    const t = window.setTimeout(() => {
+      reloadSubmissions(1);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(t);
+    };
+  }, [selectedSurveyId, submissionsSearch, submissionsPageSize, filteredAgencyIds]);
+
   const loadSurveySubmissionsAndQnAs = async (surveyId: string, qnaEnabled: boolean) => {
     try {
       setSubmissionsLoading(true);
