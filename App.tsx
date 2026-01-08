@@ -8,6 +8,7 @@ import SurveySubmit from './pages/SurveySubmit';
 import SubmissionLookup from './pages/SubmissionLookup';
 import AdminLogin from './pages/AdminLogin';
 import Statistics from './pages/Statistics';
+import SubmissionStatistics from './pages/SubmissionStatistics';
 import AdminOrganizations from './pages/AdminOrganizations';
 import { supabase } from './services/supabaseClient';
 
@@ -60,6 +61,7 @@ const App: React.FC = () => {
           <Route path="/" element={<SurveyList />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
+          <Route path="/admin/submission-statistics" element={<RequireAdmin><SubmissionStatistics /></RequireAdmin>} />
           <Route path="/admin/statistics" element={<RequireAdmin><Statistics /></RequireAdmin>} />
           <Route path="/admin/organizations" element={<RequireAdmin><AdminOrganizations /></RequireAdmin>} />
           <Route path="/admin/survey/create" element={<RequireAdmin><SurveyCreate /></RequireAdmin>} />

@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3, Building2, Search } from 'lucide-react';
+import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3, Building2, PieChart, Search } from 'lucide-react';
 import { answerSurveyQnA, clearSurveyQnAAnswer, countSurveySubmissionsBySurveyId, deleteSurveyById, deleteSurveyQnAById, deleteSurveySubmissionById, listSurveyQnAs, listSurveySubmissions, listSurveySubmissionsPaged, listSurveys, updateSurveySubmissionById } from '../services/surveys';
 import * as XLSX from 'xlsx';
 import { Survey, SurveyField, SurveyQnAPost, SurveySubmission, TableRow } from '../types';
 import { supabase } from '../services/supabaseClient';
+
 import organizationsData from '../org/organizations.generated.json';
 import TableEditor from '../components/TableEditor';
 
@@ -494,6 +495,12 @@ const Admin: React.FC = () => {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-6">
             <h1 className="text-xl font-bold text-gray-900">관리자 대시보드</h1>
+            <button
+              onClick={() => navigate('/admin/submission-statistics')}
+              className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-700 rounded-md text-sm border border-purple-200 hover:bg-purple-100 transition-colors"
+            >
+              <PieChart size={16} /> 제출통계
+            </button>
             <button
               onClick={() => navigate('/admin/statistics')}
               className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-700 rounded-md text-sm border border-purple-200 hover:bg-purple-100 transition-colors"
