@@ -31,6 +31,41 @@ type RegionOrgTypeStat = {
 
 type DrawerStatus = 'SUBMITTED' | 'NOT_SUBMITTED';
 
+const REGION_ORDER = [
+  '서울',
+  '부산',
+  '대구',
+  '인천',
+  '광주',
+  '대전',
+  '울산',
+  '세종',
+  '경기',
+  '강원',
+  '충북',
+  '충남',
+  '전북',
+  '전남',
+  '경북',
+  '경남',
+  '제주',
+];
+
+const ORG_TYPE_ORDER = [
+  '시도청',
+  '보건소',
+  '보건지소',
+  '보건진료소',
+  '금연지원센터',
+];
+
+const orderIndex = (list: string[], v: string) => {
+  const idx = list.indexOf(v);
+  return idx === -1 ? 9999 : idx;
+};
+
+const compareKorean = (a: string, b: string) => a.localeCompare(b, 'ko');
+
 const calcRate = (submitted: number, total: number) => {
   if (total <= 0) return 0;
   return Math.round((submitted / total) * 1000) / 10; // 1 decimal
@@ -151,11 +186,15 @@ const SubmissionStatistics: React.FC = () => {
     });
 
     return base.sort((a, b) => {
-      const r = a.region.localeCompare(b.region, 'ko-KR');
-      if (r !== 0) return r;
-      const t = a.orgType.localeCompare(b.orgType, 'ko-KR');
-      if (t !== 0) return t;
-      return a.orgName.localeCompare(b.orgName, 'ko-KR');
+      const ra = orderIndex(REGION_ORDER, a.region);
+      const rb = orderIndex(REGION_ORDER, b.region);
+      if (ra !== rb) return ra - rb;
+
+      const ta = orderIndex(ORG_TYPE_ORDER, a.orgType);
+      const tb = orderIndex(ORG_TYPE_ORDER, b.orgType);
+      if (ta !== tb) return ta - tb;
+
+      return compareKorean(a.orgName, b.orgName);
     });
   }, [drawerOrgType, drawerRegion, drawerSearch, drawerStatus, submittedAgencyIdSet, targetOrgRows]);
 
@@ -184,9 +223,10 @@ const SubmissionStatistics: React.FC = () => {
         submittedRate: calcRate(v.submitted, v.total),
       }))
       .sort((a, b) => {
-        if (a.key === '전국') return -1;
-        if (b.key === '전국') return 1;
-        return a.key.localeCompare(b.key, 'ko-KR');
+        const ia = orderIndex(REGION_ORDER, a.key);
+        const ib = orderIndex(REGION_ORDER, b.key);
+        if (ia !== ib) return ia - ib;
+        return compareKorean(a.key, b.key);
       });
   }, [submittedAgencyIdSet, targetOrgRows]);
   const byRegionOrgType: RegionOrgTypeStat[] = useMemo(() => {
@@ -212,9 +252,17 @@ const SubmissionStatistics: React.FC = () => {
         submittedRate: calcRate(v.submitted, v.total),
       }))
       .sort((a, b) => {
-        const regionCmp = a.region.localeCompare(b.region, 'ko-KR');
-        if (regionCmp !== 0) return regionCmp;
-        return a.orgType.localeCompare(b.orgType, 'ko-KR');
+        const ra = orderIndex(REGION_ORDER, a.region);
+        const rb = orderIndex(REGION_ORDER, b.region);
+        if (ra !== rb) return ra - rb;
+
+        const ta = orderIndex(ORG_TYPE_ORDER, a.orgType);
+        const tb = orderIndex(ORG_TYPE_ORDER, b.orgType);
+        if (ta !== tb) return ta - tb;
+
+        const rc = compareKorean(a.region, b.region);
+        if (rc !== 0) return rc;
+        return compareKorean(a.orgType, b.orgType);
       });
   }, [submittedAgencyIdSet, targetOrgRows]);
 
@@ -226,7 +274,12 @@ const SubmissionStatistics: React.FC = () => {
       map.set(row.region, list);
     }
     for (const [region, list] of map.entries()) {
-      list.sort((a, b) => a.orgType.localeCompare(b.orgType, 'ko-KR'));
+      list.sort((a, b) => {
+        const ia = orderIndex(ORG_TYPE_ORDER, a.orgType);
+        const ib = orderIndex(ORG_TYPE_ORDER, b.orgType);
+        if (ia !== ib) return ia - ib;
+        return compareKorean(a.orgType, b.orgType);
+      });
       map.set(region, list);
     }
     return map;
@@ -253,7 +306,12 @@ const SubmissionStatistics: React.FC = () => {
         notSubmitted: v.total - v.submitted,
         submittedRate: calcRate(v.submitted, v.total),
       }))
-      .sort((a, b) => a.key.localeCompare(b.key, 'ko-KR'));
+      .sort((a, b) => {
+        const ia = orderIndex(ORG_TYPE_ORDER, a.key);
+        const ib = orderIndex(ORG_TYPE_ORDER, b.key);
+        if (ia !== ib) return ia - ib;
+        return compareKorean(a.key, b.key);
+      });
   }, [submittedAgencyIdSet, targetOrgRows]);
 
   return (
@@ -464,7 +522,7 @@ const SubmissionStatistics: React.FC = () => {
                       className="w-full p-3 border border-gray-300 rounded-lg text-base outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
-                  <div className="flex-1 overflow-auto">
+                  <div className="flex-1 overflow-auto pb-10">
                     {drawerOrgList.length === 0 ? (
                       <div className="p-6 text-gray-500">표시할 기관이 없습니다.</div>
                     ) : (

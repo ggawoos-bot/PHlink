@@ -9,6 +9,41 @@ import { supabase } from '../services/supabaseClient';
 import organizationsData from '../org/organizations.generated.json';
 import TableEditor from '../components/TableEditor';
 
+const REGION_ORDER = [
+  '서울',
+  '부산',
+  '대구',
+  '인천',
+  '광주',
+  '대전',
+  '울산',
+  '세종',
+  '경기',
+  '강원',
+  '충북',
+  '충남',
+  '전북',
+  '전남',
+  '경북',
+  '경남',
+  '제주',
+];
+
+const ORG_TYPE_ORDER = [
+  '시도청',
+  '보건소',
+  '보건지소',
+  '보건진료소',
+  '금연지원센터',
+];
+
+const orderIndex = (list: string[], v: string) => {
+  const idx = list.indexOf(v);
+  return idx === -1 ? 9999 : idx;
+};
+
+const compareKorean = (a: string, b: string) => a.localeCompare(b, 'ko');
+
 const getSurveyPeriodLabel = (s: any) => {
   const start = s?.startAt ? String(s.startAt).replace('T', ' ') : '';
   const end = s?.endAt ? String(s.endAt).replace('T', ' ') : '';
@@ -75,7 +110,12 @@ const Admin: React.FC = () => {
     for (const o of orgRows) {
       if (o.region) set.add(o.region);
     }
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => {
+      const ia = orderIndex(REGION_ORDER, a);
+      const ib = orderIndex(REGION_ORDER, b);
+      if (ia !== ib) return ia - ib;
+      return compareKorean(a, b);
+    });
   }, [orgRows]);
 
   const orgTypes = useMemo(() => {
@@ -83,7 +123,12 @@ const Admin: React.FC = () => {
     for (const o of orgRows) {
       if (o.orgType) set.add(o.orgType);
     }
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => {
+      const ia = orderIndex(ORG_TYPE_ORDER, a);
+      const ib = orderIndex(ORG_TYPE_ORDER, b);
+      if (ia !== ib) return ia - ib;
+      return compareKorean(a, b);
+    });
   }, [orgRows]);
 
   const filteredAgencyIds = useMemo(() => {
