@@ -80,30 +80,54 @@ Deno.serve(async (req) => {
       }
     }
 
-    const submissionId = crypto.randomUUID()
     const submittedAt = new Date(now).toISOString()
 
-    // Requires unique constraint on (survey_id, agency_id)
-    const { data: upserted, error: upsertErr } = await supabase
+    const { data: existing, error: existingErr } = await supabase
       .schema("phlink")
       .from("survey_submissions")
-      .upsert(
-        {
-          id: submissionId,
-          survey_id: surveyId,
-          agency_id: agencyId,
+      .select("id")
+      .eq("survey_id", surveyId)
+      .eq("agency_id", agencyId)
+      .maybeSingle()
+
+    if (existingErr) return json(500, { error: existingErr.message })
+
+    if (existing?.id) {
+      const { data: updated, error: updErr } = await supabase
+        .schema("phlink")
+        .from("survey_submissions")
+        .update({
           agency_name: agencyName ?? null,
           data: answers,
           submitted_at: submittedAt,
-        },
-        { onConflict: "survey_id,agency_id" },
-      )
+        })
+        .eq("id", existing.id)
+        .select("id,survey_id,agency_id,agency_name,data,submitted_at")
+        .single()
+
+      if (updErr) return json(500, { error: updErr.message })
+
+      return json(200, { submission: updated, updated: true })
+    }
+
+    const submissionId = crypto.randomUUID()
+    const { data: inserted, error: insErr } = await supabase
+      .schema("phlink")
+      .from("survey_submissions")
+      .insert({
+        id: submissionId,
+        survey_id: surveyId,
+        agency_id: agencyId,
+        agency_name: agencyName ?? null,
+        data: answers,
+        submitted_at: submittedAt,
+      })
       .select("id,survey_id,agency_id,agency_name,data,submitted_at")
       .single()
 
-    if (upsertErr) return json(500, { error: upsertErr.message })
+    if (insErr) return json(500, { error: insErr.message })
 
-    return json(200, { submission: upserted })
+    return json(200, { submission: inserted, updated: false })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return json(500, { error: msg })

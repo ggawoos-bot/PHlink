@@ -299,7 +299,31 @@ const SurveySubmit: React.FC = () => {
 
     setLoading(false);
 
-    const errMsg = (error as any)?.message || (data as any)?.error;
+    const errStatus = (error as any)?.context?.status as number | undefined;
+    const errBodyRaw = (error as any)?.context?.body as unknown;
+    const errBody = (() => {
+      if (!errBodyRaw) return null;
+      if (typeof errBodyRaw === 'string') {
+        try {
+          return JSON.parse(errBodyRaw);
+        } catch {
+          return { error: errBodyRaw };
+        }
+      }
+      if (typeof errBodyRaw === 'object') return errBodyRaw as any;
+      return { error: String(errBodyRaw) };
+    })();
+
+    const errCode = (errBody as any)?.error || (data as any)?.error;
+    if (errCode === 'ALREADY_SUBMITTED' || errStatus === 409) {
+      console.log('[SurveySubmit] already submitted', {
+        agencyName: (errBody as any)?.agencyName,
+        submittedAt: (errBody as any)?.submittedAt,
+      });
+      return;
+    }
+
+    const errMsg = (error as any)?.message || errCode;
     if (errMsg) {
       alert(String(errMsg));
       return;
@@ -581,8 +605,9 @@ const SurveySubmit: React.FC = () => {
             <Check className="h-8 w-8 text-green-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">제출이 완료되었습니다.</h2>
-          <p className="text-gray-500">
-            {submittedAgencyName}의 자료가 성공적으로 저장되었습니다.
+          <p className="text-gray-700">
+            <span className="text-2xl font-extrabold text-indigo-700">{submittedAgencyName}</span>
+            <span className="text-gray-500">의 자료가 성공적으로 저장되었습니다.</span>
           </p>
           {submittedAtText && (
             <div className="text-xs text-gray-400 mt-2">제출 시각: {submittedAtText}</div>
