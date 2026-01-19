@@ -37,6 +37,14 @@ export interface TableRow {
   data: Record<string, any>; // columnId -> value
 }
 
+export type TableAnswerStatus = 'INPUT' | 'NONE' | 'UNKNOWN';
+
+export interface TableAnswer {
+  status: TableAnswerStatus;
+  rows: TableRow[];
+  note?: string;
+}
+
 export interface SurveyField {
   id: string;
   label: string; // e.g., "금연상담사 수"
@@ -47,6 +55,7 @@ export interface SurveyField {
   columns?: TableColumn[]; // For table type
   minRows?: number; // Minimum rows for table
   maxRows?: number; // Maximum rows for table
+  tableNoneDescription?: string; // Description for "해당 없음" checkbox (table type only)
 }
 
 export interface Survey {

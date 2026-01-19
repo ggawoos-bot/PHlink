@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Check, AlertCircle, Building, Save, Search, Share2, X, Copy, QrCode, Calendar, ChevronDown, MessageSquare, Send, User, Download } from 'lucide-react';
 import { createSurveyQnA, getSurvey, listSurveyQnAs } from '../services/surveys';
-import { Survey, Agency, SurveyField, SurveyQnAPost, SurveySubmission, TableRow } from '../types';
+import { Survey, Agency, SurveyField, SurveyQnAPost, SurveySubmission, TableAnswer, TableAnswerStatus, TableRow } from '../types';
 import { supabase } from '../services/supabaseClient';
 import organizationsData from '../org/organizations.generated.json';
 import TableEditor from '../components/TableEditor';
@@ -84,6 +84,24 @@ const SurveySubmit: React.FC = () => {
   const [selectedAgency, setSelectedAgency] = useState<Agency | null>(null);
   const [answers, setAnswers] = useState<Record<string, any>>({}); // any to support array for checkboxes
   const [systemUserId, setSystemUserId] = useState<string>('');
+
+  const normalizeTableAnswer = (v: any): TableAnswer => {
+    if (Array.isArray(v)) {
+      return { status: 'INPUT', rows: v as TableRow[] };
+    }
+    if (v && typeof v === 'object') {
+      const status = (v as any).status as TableAnswerStatus | undefined;
+      const rows = (v as any).rows;
+      if ((status === 'INPUT' || status === 'NONE' || status === 'UNKNOWN') && Array.isArray(rows)) {
+        return { status: status === 'UNKNOWN' ? 'NONE' : status, rows: rows as TableRow[], note: (v as any).note };
+      }
+    }
+    return { status: 'INPUT', rows: [] };
+  };
+
+  const setTableAnswer = (fieldId: string, next: TableAnswer) => {
+    setAnswers(prev => ({ ...prev, [fieldId]: next }));
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -251,32 +269,49 @@ const SurveySubmit: React.FC = () => {
       return;
     }
 
-    // Validation
     for (const field of survey.fields) {
+      if (field.type === 'table') {
+        const table = normalizeTableAnswer(answers[field.id]);
+
+        if (field.required) {
+          const raw = answers[field.id];
+          if (raw === undefined || raw === null) {
+            alert(`'${field.label}' 항목을 입력/선택해주세요.`);
+            return;
+          }
+        }
+
+        if (table.status === 'INPUT') {
+          const minRows = field.minRows ?? 1;
+          if (minRows > 0 && table.rows.length < minRows) {
+            alert(`'${field.label}' 테이블은 최소 ${minRows}개 행을 입력하거나 '해당없음'을 선택해주세요.`);
+            return;
+          }
+
+          if (field.columns) {
+            for (let rowIndex = 0; rowIndex < table.rows.length; rowIndex++) {
+              const row = table.rows[rowIndex];
+              for (const col of field.columns) {
+                if (col.required) {
+                  const cellValue = row.data?.[col.id];
+                  if (cellValue === undefined || cellValue === null || cellValue === '') {
+                    alert(`'${field.label}' 테이블의 ${rowIndex + 1}번째 행에서 '${col.label}' 항목을 입력/선택해주세요.`);
+                    return;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        continue;
+      }
+
       if (field.required) {
         const val = answers[field.id];
         if (val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) {
           alert(`'${field.label}' 항목을 입력/선택해주세요.`);
           return;
-        }
-      }
-      
-      // Table field validation
-      if (field.type === 'table' && field.columns) {
-        const tableData = answers[field.id] as TableRow[] | undefined;
-        if (tableData && Array.isArray(tableData)) {
-          for (let rowIndex = 0; rowIndex < tableData.length; rowIndex++) {
-            const row = tableData[rowIndex];
-            for (const col of field.columns) {
-              if (col.required) {
-                const cellValue = row.data?.[col.id];
-                if (cellValue === undefined || cellValue === null || cellValue === '') {
-                  alert(`'${field.label}' 테이블의 ${rowIndex + 1}번째 행에서 '${col.label}' 항목을 입력/선택해주세요.`);
-                  return;
-                }
-              }
-            }
-          }
         }
       }
     }
@@ -422,15 +457,44 @@ const SurveySubmit: React.FC = () => {
           />
         );
       case 'table':
-        return (
-          <TableEditor
-            columns={field.columns || []}
-            value={(answers[field.id] as TableRow[]) || []}
-            onChange={(rows) => handleInputChange(field.id, rows)}
-            minRows={field.minRows || 1}
-            maxRows={field.maxRows || 100}
-          />
-        );
+        {
+          const table = normalizeTableAnswer(answers[field.id]);
+          const isNone = table.status !== 'INPUT';
+
+          return (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isNone}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setTableAnswer(field.id, { status: 'NONE', rows: [], note: table.note });
+                      } else {
+                        setTableAnswer(field.id, { status: 'INPUT', rows: table.rows, note: table.note });
+                      }
+                    }}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  해당 없음
+                </label>
+                {field.tableNoneDescription && (
+                  <span className="text-xs text-blue-600 font-medium">({field.tableNoneDescription})</span>
+                )}
+              </div>
+
+              <TableEditor
+                columns={field.columns || []}
+                value={table.rows}
+                onChange={(rows) => setTableAnswer(field.id, { ...table, status: 'INPUT', rows })}
+                minRows={isNone ? 0 : (field.minRows || 1)}
+                maxRows={field.maxRows || 100}
+                disabled={isNone}
+              />
+            </div>
+          );
+        }
       default: // text
         return (
           <input
@@ -454,16 +518,25 @@ const SurveySubmit: React.FC = () => {
     }
 
     if (field.type === 'table') {
-      const rows = (Array.isArray(value) ? value : []) as TableRow[];
+      const table = normalizeTableAnswer(value);
+      const rows = table.rows;
       const cols = field.columns ?? [];
 
       if (cols.length === 0) {
         return <span className="text-gray-900">(테이블 컬럼 없음)</span>;
       }
 
-      if (rows.length === 0) {
-        return <span className="text-gray-400">(입력된 행 없음)</span>;
+      if (table.status !== 'INPUT') {
+        const label = '해당없음';
+        return (
+          <span className="text-gray-700">
+            {label}
+            {table.note ? <span className="text-gray-500"> ({table.note})</span> : null}
+          </span>
+        );
       }
+
+      if (rows.length === 0) return <span className="text-gray-400">(입력된 행 없음)</span>;
 
       return (
         <div className="overflow-x-auto">
@@ -507,7 +580,11 @@ const SurveySubmit: React.FC = () => {
   const toExcelCellString = (field: SurveyField, value: any) => {
     if (value === undefined || value === null || value === '') return '';
     if (field.type === 'multiselect' && Array.isArray(value)) return value.join(', ');
-    if (field.type === 'table') return '(테이블: 별도 시트 참조)';
+    if (field.type === 'table') {
+      const table = normalizeTableAnswer(value);
+      if (table.status !== 'INPUT') return '해당없음';
+      return '(테이블: 별도 시트 참조)';
+    }
     if (typeof value === 'string') return value;
     return String(value);
   };
@@ -553,7 +630,8 @@ const SurveySubmit: React.FC = () => {
         if (field.type !== 'table') continue;
 
         const cols = field.columns ?? [];
-        const rows = ((submittedData as any)[field.id] ?? []) as TableRow[];
+        const table = normalizeTableAnswer((submittedData as any)[field.id]);
+        const rows = (table.status === 'INPUT' ? table.rows : []) as TableRow[];
 
         const header = cols.map(c => c.label);
         const aoa: any[][] = [header];

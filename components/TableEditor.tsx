@@ -9,6 +9,7 @@ interface TableEditorProps {
   minRows?: number;
   maxRows?: number;
   readOnly?: boolean;
+  disabled?: boolean;
 }
 
 const TableEditor: React.FC<TableEditorProps> = ({
@@ -18,6 +19,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
   minRows = 1,
   maxRows = 100,
   readOnly = false,
+  disabled = false,
 }) => {
   const [rows, setRows] = useState<TableRow[]>(value);
   const [selectedCell, setSelectedCell] = useState<{ rowId: string; colId: string } | null>(null);
@@ -25,6 +27,8 @@ const TableEditor: React.FC<TableEditorProps> = ({
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const tableRef = useRef<HTMLDivElement>(null);
   const resizeStateRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
+
+  const effectiveReadOnly = readOnly || disabled;
 
   useEffect(() => {
     setRows(value);
@@ -79,12 +83,13 @@ const TableEditor: React.FC<TableEditorProps> = ({
   }, []);
 
   useEffect(() => {
+    if (effectiveReadOnly) return;
     if (rows.length === 0 && minRows > 0) {
       const initialRows = Array.from({ length: minRows }, () => createEmptyRow());
       setRows(initialRows);
       onChange(initialRows);
     }
-  }, []);
+  }, [effectiveReadOnly, minRows, columns]);
 
   const createEmptyRow = (): TableRow => ({
     id: `ROW${Date.now()}${Math.random()}`,
@@ -92,6 +97,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
   });
 
   const handleAddRow = () => {
+    if (effectiveReadOnly) return;
     if (rows.length >= maxRows) {
       alert(`최대 ${maxRows}개 행까지만 추가할 수 있습니다.`);
       return;
@@ -103,6 +109,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
   };
 
   const handleDeleteRow = (rowId: string) => {
+    if (effectiveReadOnly) return;
     if (rows.length <= minRows) {
       alert(`최소 ${minRows}개 행은 유지되어야 합니다.`);
       return;
@@ -113,6 +120,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
   };
 
   const handleCellChange = (rowId: string, colId: string, value: any) => {
+    if (effectiveReadOnly) return;
     const updatedRows = rows.map(row => {
       if (row.id === rowId) {
         return {
@@ -127,6 +135,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
   };
 
   const handlePaste = async (e: React.ClipboardEvent) => {
+    if (effectiveReadOnly) return;
     e.preventDefault();
     const pastedText = e.clipboardData.getData('text');
     
@@ -213,7 +222,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
     const value = row.data[col.id] || '';
     const isSelected = selectedCell?.rowId === row.id && selectedCell?.colId === col.id;
 
-    if (readOnly) {
+    if (effectiveReadOnly) {
       return (
         <div className="px-3 py-2 text-sm text-gray-700">
           {value}
@@ -294,7 +303,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
 
   return (
     <div className="space-y-3">
-      {!readOnly && (
+      {!effectiveReadOnly && (
         <div className="flex gap-2 flex-wrap">
           <button
             type="button"
@@ -343,7 +352,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
                 >
                   {col.label}
                   {col.required && <span className="text-red-500 ml-1">*</span>}
-                  {!readOnly && (
+                  {!effectiveReadOnly && (
                     <div
                       role="separator"
                       aria-orientation="vertical"
@@ -362,7 +371,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
                   )}
                 </th>
               ))}
-              {!readOnly && (
+              {!effectiveReadOnly && (
                 <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 border-b-2 border-gray-300 w-20 bg-gray-50">
                   삭제
                 </th>
@@ -391,7 +400,7 @@ const TableEditor: React.FC<TableEditorProps> = ({
                       {renderCell(row, col)}
                     </td>
                   ))}
-                  {!readOnly && (
+                  {!effectiveReadOnly && (
                     <td className="px-4 py-2 border-b border-gray-200 text-center">
                       <button
                         type="button"

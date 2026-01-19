@@ -840,6 +840,16 @@ const SurveyCreate: React.FC = () => {
                                  />
                              </div>
                          </div>
+                         <div className="mt-3">
+                            <label className="block text-xs text-gray-600 mb-1">'해당 없음' 설명</label>
+                            <input 
+                              type="text"
+                              value={field.tableNoneDescription || ''}
+                              onChange={(e) => handleFieldChange(index, 'tableNoneDescription', e.target.value)}
+                              placeholder="예: 해당 사업을 운영하지 않는 경우 체크"
+                              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
+                            />
+                        </div>
                      </div>
                  )}
 

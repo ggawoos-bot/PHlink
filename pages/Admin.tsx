@@ -3,7 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { Download, Plus, MessageCircle, ClipboardList, FileText, Pencil, Trash2, Share2, X, Copy, QrCode, Eye, BarChart3, Building2, PieChart, Search } from 'lucide-react';
 import { answerSurveyQnA, clearSurveyQnAAnswer, countSurveySubmissionsBySurveyId, deleteSurveyById, deleteSurveyQnAById, deleteSurveySubmissionById, listSurveyQnAs, listSurveySubmissions, listSurveySubmissionsPaged, listSurveys, updateSurveySubmissionById } from '../services/surveys';
 import * as XLSX from 'xlsx';
-import { Survey, SurveyField, SurveyQnAPost, SurveySubmission, TableRow } from '../types';
+import { Survey, SurveyField, SurveyQnAPost, SurveySubmission, TableRow, TableAnswer, TableAnswerStatus } from '../types';
+
+const normalizeTableAnswer = (v: any): TableAnswer => {
+  if (Array.isArray(v)) {
+    return { status: 'INPUT', rows: v as TableRow[] };
+  }
+  if (v && typeof v === 'object') {
+    const status = (v as any).status as TableAnswerStatus | undefined;
+    const rows = (v as any).rows;
+    if ((status === 'INPUT' || status === 'NONE' || status === 'UNKNOWN') && Array.isArray(rows)) {
+      return { status: status === 'UNKNOWN' ? 'NONE' : status, rows: rows as TableRow[], note: (v as any).note };
+    }
+  }
+  return { status: 'INPUT', rows: [] };
+};
 import { supabase } from '../services/supabaseClient';
 
 import organizationsData from '../org/organizations.generated.json';
@@ -322,16 +336,42 @@ const Admin: React.FC = () => {
             onChange={(e) => setEditingAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
           />
         );
-      case 'table':
+      case 'table': {
+        const table = normalizeTableAnswer(value);
+        const isNone = table.status !== 'INPUT';
         return (
-          <TableEditor
-            columns={field.columns || []}
-            value={((value ?? []) as TableRow[]) || []}
-            onChange={(rows) => setEditingAnswers(prev => ({ ...prev, [field.id]: rows }))}
-            minRows={field.minRows || 1}
-            maxRows={field.maxRows || 100}
-          />
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isNone}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setEditingAnswers(prev => ({ ...prev, [field.id]: { status: 'NONE', rows: [], note: table.note } }));
+                    } else {
+                      setEditingAnswers(prev => ({ ...prev, [field.id]: { status: 'INPUT', rows: table.rows, note: table.note } }));
+                    }
+                  }}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                해당 없음
+              </label>
+              {field.tableNoneDescription && (
+                <span className="text-xs text-blue-600 font-medium">({field.tableNoneDescription})</span>
+              )}
+            </div>
+            <TableEditor
+              columns={field.columns || []}
+              value={table.rows}
+              onChange={(rows) => setEditingAnswers(prev => ({ ...prev, [field.id]: { ...table, status: 'INPUT', rows } }))}
+              minRows={isNone ? 0 : (field.minRows || 1)}
+              maxRows={field.maxRows || 100}
+              disabled={isNone}
+            />
+          </div>
         );
+      }
       default:
         return (
           <input
@@ -387,9 +427,9 @@ const Admin: React.FC = () => {
             const region = org?.region || '';
             const orgType = org?.orgType || '';
 
-            const tableData = sub.data[field.id] as TableRow[] | undefined;
-            if (tableData && Array.isArray(tableData)) {
-              tableData.forEach(row => {
+            const table = normalizeTableAnswer(sub.data[field.id]);
+            if (table.status === 'INPUT' && table.rows.length > 0) {
+              table.rows.forEach(row => {
                 const rowData = [
                   region,
                   orgType,
@@ -749,9 +789,13 @@ const Admin: React.FC = () => {
                               const value = sub.data[field.id];
                               let displayValue = '';
                               
-                              if (field.type === 'table' && Array.isArray(value)) {
-                                // Table data: show row count
-                                displayValue = `${value.length}개 행`;
+                              if (field.type === 'table') {
+                                const table = normalizeTableAnswer(value);
+                                if (table.status !== 'INPUT') {
+                                  displayValue = '해당없음';
+                                } else {
+                                  displayValue = `${table.rows.length}개 행`;
+                                }
                               } else if (Array.isArray(value)) {
                                 // Multiselect
                                 displayValue = value.join(', ');
@@ -761,13 +805,19 @@ const Admin: React.FC = () => {
                               
                               return (
                                 <td key={field.id} className="px-6 py-4 whitespace-nowrap text-gray-600">
-                                  {field.type === 'table' && Array.isArray(value) && value.length > 0 ? (
-                                    <button
-                                      onClick={() => setSelectedSubmission(sub)}
-                                      className="text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1"
-                                    >
-                                      <Eye size={14} /> {displayValue}
-                                    </button>
+                                  {field.type === 'table' ? (
+                                    normalizeTableAnswer(value).status !== 'INPUT' ? (
+                                      <span className="text-gray-500">해당없음</span>
+                                    ) : normalizeTableAnswer(value).rows.length > 0 ? (
+                                      <button
+                                        onClick={() => setSelectedSubmission(sub)}
+                                        className="text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1"
+                                      >
+                                        <Eye size={14} /> {displayValue}
+                                      </button>
+                                    ) : (
+                                      displayValue
+                                    )
                                   ) : (
                                     displayValue
                                   )}
@@ -902,33 +952,44 @@ const Admin: React.FC = () => {
                     <div key={field.id} className="border-b border-gray-100 pb-4 last:border-0">
                       <h4 className="font-bold text-gray-900 mb-2">{field.label}</h4>
                       
-                      {field.type === 'table' && Array.isArray(value) ? (
-                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                          <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-4 py-2 text-left text-xs font-bold text-gray-500">#</th>
-                                {field.columns?.map(col => (
-                                  <th key={col.id} className="px-4 py-2 text-left text-xs font-bold text-gray-500">
-                                    {col.label}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {value.map((row: any, idx: number) => (
-                                <tr key={row.id || idx} className="hover:bg-gray-50">
-                                  <td className="px-4 py-2 text-gray-600">{idx + 1}</td>
-                                  {field.columns?.map(col => (
-                                    <td key={col.id} className="px-4 py-2 text-gray-600">
-                                      {row.data?.[col.id] || ''}
-                                    </td>
+                      {field.type === 'table' ? (
+                        (() => {
+                          const table = normalizeTableAnswer(value);
+                          if (table.status !== 'INPUT') {
+                            return <p className="text-gray-500">해당없음</p>;
+                          }
+                          if (table.rows.length === 0) {
+                            return <p className="text-gray-400">(입력된 행 없음)</p>;
+                          }
+                          return (
+                            <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-500">#</th>
+                                    {field.columns?.map(col => (
+                                      <th key={col.id} className="px-4 py-2 text-left text-xs font-bold text-gray-500">
+                                        {col.label}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {table.rows.map((row: any, idx: number) => (
+                                    <tr key={row.id || idx} className="hover:bg-gray-50">
+                                      <td className="px-4 py-2 text-gray-600">{idx + 1}</td>
+                                      {field.columns?.map(col => (
+                                        <td key={col.id} className="px-4 py-2 text-gray-600">
+                                          {row.data?.[col.id] || ''}
+                                        </td>
+                                      ))}
+                                    </tr>
                                   ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        })()
                       ) : Array.isArray(value) ? (
                         <div className="flex flex-wrap gap-2">
                           {value.map((v, idx) => (

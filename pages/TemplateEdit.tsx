@@ -498,10 +498,20 @@ const TemplateEdit: React.FC = () => {
                                  />
                              </div>
                          </div>
-                     </div>
-                 )}
+                         <div className="mt-3">
+                            <label className="block text-xs text-gray-600 mb-1">'해당 없음' 설명</label>
+                            <input 
+                              type="text"
+                              value={field.tableNoneDescription || ''}
+                              onChange={(e) => handleFieldChange(index, 'tableNoneDescription', e.target.value)}
+                              placeholder="예: 해당 사업을 운영하지 않는 경우 체크"
+                              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
+                            />
+                        </div>
+                    </div>
+                )}
 
-                 {['select', 'multiselect'].includes(field.type) && (
+                {['select', 'multiselect'].includes(field.type) && (
                      <div className="mt-4 pt-4 border-t border-gray-200">
                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2">선택 옵션 관리</label>
                          <div className="flex flex-wrap gap-2 mb-2">
